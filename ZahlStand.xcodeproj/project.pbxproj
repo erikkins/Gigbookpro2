@@ -1,0 +1,387 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0001 /* ZahlStandApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001 /* ZahlStandApp.swift */; };
+		AA0002 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002 /* AppConfig.swift */; };
+		AA0003 /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0003 /* Song.swift */; };
+		AA0004 /* Songlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0004 /* Songlist.swift */; };
+		AA0005 /* MIDIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0005 /* MIDIService.swift */; };
+		AA0006 /* DocumentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0006 /* DocumentService.swift */; };
+		AA0007 /* SonglistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0007 /* SonglistService.swift */; };
+		AA0008 /* AzureStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0008 /* AzureStorageService.swift */; };
+		AA0009 /* PeerConnectivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0009 /* PeerConnectivityService.swift */; };
+		AA0010 /* DocumentViewerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0010 /* DocumentViewerViewModel.swift */; };
+		AA0011 /* DocumentViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0011 /* DocumentViewer.swift */; };
+		AA0012 /* NewSonglistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0012 /* NewSonglistView.swift */; };
+		AA0013 /* CloudSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0013 /* CloudSyncView.swift */; };
+		AA0014 /* SonglistPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0014 /* SonglistPicker.swift */; };
+		AA0015 /* MIDISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0015 /* MIDISettingsView.swift */; };
+		AA0016 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0016 /* Assets.xcassets */; };
+		AA0017 /* BundledSongs in Resources */ = {isa = PBXBuildFile; fileRef = BB0018 /* BundledSongs */; };
+		AA0019 /* SongEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0019 /* SongEditorView.swift */; };
+		AA0020 /* SonglistEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0020 /* SonglistEditorView.swift */; };
+		AA0021 /* GzipHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0021 /* GzipHelper.swift */; };
+		AA0022 /* DataCompression in Frameworks */ = {isa = PBXBuildFile; productRef = DCPROD001 /* DataCompression */; };
+		AA0023 /* PunchHoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0023 /* PunchHoleView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		APPID /* GigBookPro2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GigBookPro2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0001 /* ZahlStandApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZahlStandApp.swift; sourceTree = "<group>"; };
+		BB0002 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		BB0003 /* Song.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Song.swift; sourceTree = "<group>"; };
+		BB0004 /* Songlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Songlist.swift; sourceTree = "<group>"; };
+		BB0005 /* MIDIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIService.swift; sourceTree = "<group>"; };
+		BB0006 /* DocumentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentService.swift; sourceTree = "<group>"; };
+		BB0007 /* SonglistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonglistService.swift; sourceTree = "<group>"; };
+		BB0008 /* AzureStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AzureStorageService.swift; sourceTree = "<group>"; };
+		BB0009 /* PeerConnectivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerConnectivityService.swift; sourceTree = "<group>"; };
+		BB0010 /* DocumentViewerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentViewerViewModel.swift; sourceTree = "<group>"; };
+		BB0011 /* DocumentViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentViewer.swift; sourceTree = "<group>"; };
+		BB0012 /* NewSonglistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSonglistView.swift; sourceTree = "<group>"; };
+		BB0013 /* CloudSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncView.swift; sourceTree = "<group>"; };
+		BB0014 /* SonglistPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonglistPicker.swift; sourceTree = "<group>"; };
+		BB0015 /* MIDISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDISettingsView.swift; sourceTree = "<group>"; };
+		BB0016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB0017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB0018 /* BundledSongs */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledSongs; sourceTree = "<group>"; };
+		BB0019 /* SongEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongEditorView.swift; sourceTree = "<group>"; };
+		BB0020 /* SonglistEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonglistEditorView.swift; sourceTree = "<group>"; };
+		BB0021 /* GzipHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GzipHelper.swift; sourceTree = "<group>"; };
+		BB0023 /* PunchHoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PunchHoleView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FRAMEWORKS /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0022 /* DataCompression in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		MODELS /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BB0003 /* Song.swift */,
+				BB0004 /* Songlist.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		PRODUCTS /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				APPID /* GigBookPro2.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ROOTGROUP = {
+			isa = PBXGroup;
+			children = (
+				ZAHLSTAND /* ZahlStand */,
+				PRODUCTS /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		SERVICES /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				BB0005 /* MIDIService.swift */,
+				BB0006 /* DocumentService.swift */,
+				BB0007 /* SonglistService.swift */,
+				BB0008 /* AzureStorageService.swift */,
+				BB0009 /* PeerConnectivityService.swift */,
+				BB0021 /* GzipHelper.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		VIEWMODELS /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				BB0010 /* DocumentViewerViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		VIEWS /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				BB0011 /* DocumentViewer.swift */,
+				BB0012 /* NewSonglistView.swift */,
+				BB0013 /* CloudSyncView.swift */,
+				BB0014 /* SonglistPicker.swift */,
+				BB0015 /* MIDISettingsView.swift */,
+				BB0019 /* SongEditorView.swift */,
+				BB0020 /* SonglistEditorView.swift */,
+				BB0023 /* PunchHoleView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		ZAHLSTAND /* ZahlStand */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001 /* ZahlStandApp.swift */,
+				BB0002 /* AppConfig.swift */,
+				BB0017 /* Info.plist */,
+				MODELS /* Models */,
+				SERVICES /* Services */,
+				VIEWMODELS /* ViewModels */,
+				VIEWS /* Views */,
+				BB0016 /* Assets.xcassets */,
+				BB0018 /* BundledSongs */,
+			);
+			path = ZahlStand;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		TARGET /* ZahlStand */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CONFIGLIST /* Build configuration list for PBXNativeTarget "ZahlStand" */;
+			buildPhases = (
+				SOURCES /* Sources */,
+				FRAMEWORKS /* Frameworks */,
+				RESOURCES /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ZahlStand;
+			packageProductDependencies = (
+				DCPROD001 /* DataCompression */,
+			);
+			productName = ZahlStand;
+			productReference = APPID /* GigBookPro2.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PROJECT /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					TARGET = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = PROJECTCONFIG /* Build configuration list for PBXProject "ZahlStand" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = ROOTGROUP;
+			packageReferences = (
+				DCPKGREF /* XCRemoteSwiftPackageReference "DataCompression" */,
+			);
+			productRefGroup = PRODUCTS /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TARGET /* ZahlStand */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RESOURCES /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0016 /* Assets.xcassets in Resources */,
+				AA0017 /* BundledSongs in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		SOURCES /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0001 /* ZahlStandApp.swift in Sources */,
+				AA0002 /* AppConfig.swift in Sources */,
+				AA0003 /* Song.swift in Sources */,
+				AA0004 /* Songlist.swift in Sources */,
+				AA0005 /* MIDIService.swift in Sources */,
+				AA0006 /* DocumentService.swift in Sources */,
+				AA0007 /* SonglistService.swift in Sources */,
+				AA0008 /* AzureStorageService.swift in Sources */,
+				AA0009 /* PeerConnectivityService.swift in Sources */,
+				AA0010 /* DocumentViewerViewModel.swift in Sources */,
+				AA0011 /* DocumentViewer.swift in Sources */,
+				AA0012 /* NewSonglistView.swift in Sources */,
+				AA0013 /* CloudSyncView.swift in Sources */,
+				AA0014 /* SonglistPicker.swift in Sources */,
+				AA0015 /* MIDISettingsView.swift in Sources */,
+				AA0019 /* SongEditorView.swift in Sources */,
+				AA0020 /* SonglistEditorView.swift in Sources */,
+				AA0021 /* GzipHelper.swift in Sources */,
+				AA0023 /* PunchHoleView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		DEBUG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = PWYELC3252;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ZahlStand/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zahlstand2.app;
+				PRODUCT_NAME = GigBookPro2;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		RELEASE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = PWYELC3252;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ZahlStand/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zahlstand2.app;
+				PRODUCT_NAME = GigBookPro2;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CONFIGLIST /* Build configuration list for PBXNativeTarget "ZahlStand" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DEBUG /* Debug */,
+				RELEASE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		PROJECTCONFIG /* Build configuration list for PBXProject "ZahlStand" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DEBUG /* Debug */,
+				RELEASE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DCPKGREF /* XCRemoteSwiftPackageReference "DataCompression" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mw99/DataCompression.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DCPROD001 /* DataCompression */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCPKGREF /* XCRemoteSwiftPackageReference "DataCompression" */;
+			productName = DataCompression;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = PROJECT /* Project object */;
+}
