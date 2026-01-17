@@ -49,6 +49,7 @@ struct NumericTextField: UIViewRepresentable {
 struct SongEditorView: View {
     @ObservedObject var song: Song
     @EnvironmentObject var documentService: DocumentService
+    @EnvironmentObject var midiService: MIDIService
     @Environment(\.dismiss) var dismiss
     
     @State private var title: String = ""
@@ -71,6 +72,9 @@ struct SongEditorView: View {
                 songDetailsSection
                 midiSection
                 if midiEnabled {
+                    if !midiService.customPatches.isEmpty {
+                        customPatchesSection
+                    }
                     presetsSection
                 }
                 notesSection
@@ -156,6 +160,25 @@ struct SongEditorView: View {
         }
     }
     
+    private var customPatchesSection: some View {
+        Section {
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 10) {
+                ForEach(midiService.customPatches) { patch in
+                    PresetButton(name: patch.name, program: patch.programNumber) {
+                        midiPatchText = "\($0)"
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text(midiService.nordStageMode ? "Nord Stage Patches" : "Custom Patches")
+        }
+    }
+
     private var presetsSection: some View {
         Section {
             LazyVGrid(columns: [

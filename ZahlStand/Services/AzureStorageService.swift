@@ -73,6 +73,7 @@ class AzureStorageService: ObservableObject {
         
         var req = URLRequest(url: URL(string: "\(baseURL)/\(newContainer)?restype=container")!)
         req.httpMethod = "PUT"
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.setValue(date, forHTTPHeaderField: "x-ms-date")
         req.setValue("2021-06-08", forHTTPHeaderField: "x-ms-version")
         req.setValue(auth, forHTTPHeaderField: "Authorization")
@@ -97,6 +98,7 @@ class AzureStorageService: ObservableObject {
         
         var req = URLRequest(url: URL(string: "\(baseURL)/\(container)?restype=container&comp=list")!)
         req.httpMethod = "GET"
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.setValue(date, forHTTPHeaderField: "x-ms-date")
         req.setValue("2021-06-08", forHTTPHeaderField: "x-ms-version")
         req.setValue(auth, forHTTPHeaderField: "Authorization")
@@ -122,25 +124,37 @@ class AzureStorageService: ObservableObject {
         isDownloading = true
         downloadProgress = 0
         defer { isDownloading = false }
-        
-        // URL encode the blob name for both signature and URL
+
+        // Try with encoded name in signature first (matching how it was uploaded)
         let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        
+
         let date = xmsDate()
         let headers = "x-ms-date:\(date)\nx-ms-version:2021-06-08"
+
+        // Use ENCODED name in resource (to match upload behavior)
         let resource = "/\(accountName)/\(container)/\(encodedName)"
         guard let auth = authorize(method: "GET", date: date, headers: headers, resource: resource)
         else { throw AzureError.authFailed }
-        
-        var req = URLRequest(url: URL(string: "\(baseURL)/\(container)/\(encodedName)")!)
+
+        let urlString = "\(baseURL)/\(container)/\(encodedName)"
+        var req = URLRequest(url: URL(string: urlString)!)
         req.httpMethod = "GET"
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.setValue(date, forHTTPHeaderField: "x-ms-date")
         req.setValue("2021-06-08", forHTTPHeaderField: "x-ms-version")
         req.setValue(auth, forHTTPHeaderField: "Authorization")
-        
+
+        print("📥 Downloading: \(name)")
+
         let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, http.statusCode != 200 {
-            throw AzureError.downloadFailed(http.statusCode)
+        if let http = resp as? HTTPURLResponse {
+            print("📥 Response: \(http.statusCode)")
+            if http.statusCode != 200 {
+                if let errorBody = String(data: data, encoding: .utf8) {
+                    print("📥 Error: \(errorBody)")
+                }
+                throw AzureError.downloadFailed(http.statusCode)
+            }
         }
         downloadProgress = 1
         return data
@@ -152,9 +166,9 @@ class AzureStorageService: ObservableObject {
         isUploading = true
         uploadProgress = 0
         defer { isUploading = false }
-        
+
         let data = try exportSonglist(songlist, documentService: documentService)
-        
+
         // Sanitize blob name
         let sanitizedName = songlist.name
             .replacingOccurrences(of: "/", with: "-")
@@ -162,25 +176,26 @@ class AzureStorageService: ObservableObject {
             .replacingOccurrences(of: "?", with: "")
             .replacingOccurrences(of: "#", with: "")
         let blobName = "\(sanitizedName).json"
-        
-        // URL encode the blob name - this MUST be used in both the signature AND the URL
+
+        // URL encode the blob name for the URL
         let encodedBlobName = blobName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? blobName
-        
-        print("📤 Uploading: \(blobName) → \(encodedBlobName) (\(data.count) bytes)")
-        
+
+        print("📤 Uploading: \(blobName) (\(data.count) bytes)")
+
         let date = xmsDate()
         let headers = "x-ms-blob-type:BlockBlob\nx-ms-date:\(date)\nx-ms-version:2021-06-08"
-        // Use URL-encoded blob name in the resource for signature
+        // Use encoded blob name in the resource for signature
         let resource = "/\(accountName)/\(newContainer)/\(encodedBlobName)"
-        
+
         guard let auth = authorize(method: "PUT", contentLength: data.count, contentType: "application/json",
                                    date: date, headers: headers, resource: resource)
         else { throw AzureError.authFailed }
-        
+
         let urlString = "\(baseURL)/\(newContainer)/\(encodedBlobName)"
         
         var req = URLRequest(url: URL(string: urlString)!)
         req.httpMethod = "PUT"
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.httpBody = data
         req.setValue(date, forHTTPHeaderField: "x-ms-date")
         req.setValue("2021-06-08", forHTTPHeaderField: "x-ms-version")
@@ -235,19 +250,21 @@ class AzureStorageService: ObservableObject {
     
     func deleteSonglist(name: String) async throws {
         let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        
+
         let date = xmsDate()
         let headers = "x-ms-date:\(date)\nx-ms-version:2021-06-08"
+        // Use encoded name in resource for signature
         let resource = "/\(accountName)/\(newContainer)/\(encodedName)"
         guard let auth = authorize(method: "DELETE", date: date, headers: headers, resource: resource)
         else { throw AzureError.authFailed }
-        
+
         var req = URLRequest(url: URL(string: "\(baseURL)/\(newContainer)/\(encodedName)")!)
         req.httpMethod = "DELETE"
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.setValue(date, forHTTPHeaderField: "x-ms-date")
         req.setValue("2021-06-08", forHTTPHeaderField: "x-ms-version")
         req.setValue(auth, forHTTPHeaderField: "Authorization")
-        
+
         let (_, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode != 202 {
             throw AzureError.deleteFailed(http.statusCode)
@@ -367,6 +384,10 @@ class AzureStorageService: ObservableObject {
         let sl = Songlist(name: legacy.name, songIds: ids)
         sl.documentService = documentService
         try songlistService.saveSonglist(sl)
+
+        // Refresh songs list to reflect any new imports or MIDI updates
+        documentService.loadSongs()
+
         return sl
     }
     
@@ -382,13 +403,14 @@ class AzureStorageService: ObservableObject {
             for s in songs {
                 let fn = "\(s["fileName"] as? String ?? "").\(s["fileExtension"] as? String ?? "")"
                 if let existing = documentService.songs.first(where: { $0.fullFileName == fn }) {
+                    // Song exists - apply MIDI settings from cloud if present
+                    applyMIDISettings(from: s, to: existing)
+                    documentService.saveSong(existing)
                     ids.append(existing.id)
                 } else if let b64 = s["fileData"] as? String, let fileData = Data(base64Encoded: b64) {
+                    // New song - import file and apply MIDI settings
                     let song = try await documentService.importEmbeddedFile(name: s["title"] as? String ?? "", fileName: fn, data: fileData)
-                    if let c = s["midiChannel"] as? Int { song.midiChannel = c }
-                    if let p = s["midiProgramNumber"] as? Int { song.midiProgramNumber = p }
-                    if let m = s["midiBankMSB"] as? Int { song.midiBankMSB = m }
-                    if let l = s["midiBankLSB"] as? Int { song.midiBankLSB = l }
+                    applyMIDISettings(from: s, to: song)
                     documentService.saveSong(song)
                     ids.append(song.id)
                 }
@@ -399,7 +421,28 @@ class AzureStorageService: ObservableObject {
         sl.venue = json["venue"] as? String
         sl.documentService = documentService
         try songlistService.saveSonglist(sl)
+
+        // Refresh songs list to reflect any new imports or MIDI updates
+        documentService.loadSongs()
+
         return sl
+    }
+
+    /// Apply MIDI settings from cloud data to a song (retains cloud settings when present)
+    private func applyMIDISettings(from cloudData: [String: Any], to song: Song) {
+        // Only update if cloud has MIDI settings
+        if let channel = cloudData["midiChannel"] as? Int {
+            song.midiChannel = channel
+        }
+        if let program = cloudData["midiProgramNumber"] as? Int {
+            song.midiProgramNumber = program
+        }
+        if let bankMSB = cloudData["midiBankMSB"] as? Int {
+            song.midiBankMSB = bankMSB
+        }
+        if let bankLSB = cloudData["midiBankLSB"] as? Int {
+            song.midiBankLSB = bankLSB
+        }
     }
 }
 

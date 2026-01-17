@@ -3,7 +3,9 @@ import SwiftUI
 struct MIDISettingsView: View {
     @ObservedObject var midiService: MIDIService
     @Environment(\.dismiss) var dismiss
-    
+    @State private var showingAddPatch = false
+    @State private var editingPatch: MIDIPatch?
+
     var body: some View {
         NavigationView {
             List {
@@ -27,6 +29,68 @@ struct MIDISettingsView: View {
                     Text("Connect to a synthesizer, keyboard, or workstation to send program changes when songs change.")
                 }
                 
+                Section {
+                    Toggle("Nord Stage Mode", isOn: $midiService.nordStageMode)
+                } header: {
+                    Text("Instrument Settings")
+                } footer: {
+                    Text("Enable for Nord Stage 2/3 keyboards. Automatically sends Bank MSB=0, LSB=3 before each program change.")
+                }
+
+                Section {
+                    ForEach(midiService.customPatches) { patch in
+                        Button {
+                            editingPatch = patch
+                        } label: {
+                            HStack {
+                                Text(patch.name)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("PC \(patch.programNumber)")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            midiService.deletePatch(midiService.customPatches[index])
+                        }
+                    }
+                    .onMove { source, destination in
+                        midiService.movePatch(from: source, to: destination)
+                    }
+
+                    Button {
+                        showingAddPatch = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Add Custom Patch")
+                        }
+                    }
+
+                    Button {
+                        midiService.resetPatchesToDefaults()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundColor(.orange)
+                            Text("Reset to Nord Defaults")
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Custom Patches")
+                        Spacer()
+                        EditButton()
+                            .font(.caption)
+                    }
+                } footer: {
+                    Text("Define your instrument's patches here. These appear as quick presets when editing songs.")
+                }
+
                 Section("MIDI Destinations (Instruments)") {
                     if midiService.availableDestinations.isEmpty {
                         Text("No MIDI devices found")
@@ -115,6 +179,98 @@ struct MIDISettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showingAddPatch) {
+                PatchEditorView(midiService: midiService, patch: nil)
+            }
+            .sheet(item: $editingPatch) { patch in
+                PatchEditorView(midiService: midiService, patch: patch)
+            }
         }
+    }
+}
+
+// MARK: - Patch Editor View
+
+struct PatchEditorView: View {
+    @ObservedObject var midiService: MIDIService
+    let patch: MIDIPatch?
+    @Environment(\.dismiss) var dismiss
+
+    @State private var name: String = ""
+    @State private var programNumber: String = ""
+
+    var isEditing: Bool { patch != nil }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    TextField("Patch Name", text: $name)
+                        .autocapitalization(.words)
+
+                    HStack {
+                        Text("Program Number")
+                        Spacer()
+                        TextField("0-127", text: $programNumber)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                    }
+                } footer: {
+                    Text("Program number is 0-127 (MIDI standard)")
+                }
+
+                if isEditing {
+                    Section {
+                        Button(role: .destructive) {
+                            if let patch = patch {
+                                midiService.deletePatch(patch)
+                            }
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Delete Patch")
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isEditing ? "Edit Patch" : "Add Patch")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        savePatch()
+                    }
+                    .disabled(name.isEmpty || programNumber.isEmpty)
+                }
+            }
+            .onAppear {
+                if let patch = patch {
+                    name = patch.name
+                    programNumber = "\(patch.programNumber)"
+                }
+            }
+        }
+    }
+
+    private func savePatch() {
+        guard let program = Int(programNumber), program >= 0, program <= 127 else { return }
+
+        if let existingPatch = patch {
+            var updated = existingPatch
+            updated.name = name
+            updated.programNumber = program
+            midiService.updatePatch(updated)
+        } else {
+            let newPatch = MIDIPatch(name: name, programNumber: program)
+            midiService.addPatch(newPatch)
+        }
+        dismiss()
     }
 }

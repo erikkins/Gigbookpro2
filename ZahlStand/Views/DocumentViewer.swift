@@ -6,11 +6,12 @@ struct DocumentViewer: View {
     @StateObject private var viewModel: DocumentViewerViewModel
     @State private var showingMIDISettings = false
     @State private var showingQuickJump = false
-    
+
     let midiService: MIDIService
     private let initialSong: Song?
     private let initialSonglist: Songlist?
-    
+    private let initialLibrarySongs: [Song]?
+
     init(documentService: DocumentService, songlistService: SonglistService, midiService: MIDIService) {
         _viewModel = StateObject(wrappedValue: DocumentViewerViewModel(
             documentService: documentService,
@@ -20,8 +21,9 @@ struct DocumentViewer: View {
         self.midiService = midiService
         self.initialSong = nil
         self.initialSonglist = nil
+        self.initialLibrarySongs = nil
     }
-    
+
     init(documentService: DocumentService, songlistService: SonglistService, midiService: MIDIService, initialSong: Song) {
         _viewModel = StateObject(wrappedValue: DocumentViewerViewModel(
             documentService: documentService,
@@ -31,8 +33,21 @@ struct DocumentViewer: View {
         self.midiService = midiService
         self.initialSong = initialSong
         self.initialSonglist = nil
+        self.initialLibrarySongs = nil
     }
-    
+
+    init(documentService: DocumentService, songlistService: SonglistService, midiService: MIDIService, initialSong: Song, initialLibrarySongs: [Song]) {
+        _viewModel = StateObject(wrappedValue: DocumentViewerViewModel(
+            documentService: documentService,
+            songlistService: songlistService,
+            midiService: midiService
+        ))
+        self.midiService = midiService
+        self.initialSong = initialSong
+        self.initialSonglist = nil
+        self.initialLibrarySongs = initialLibrarySongs
+    }
+
     init(documentService: DocumentService, songlistService: SonglistService, midiService: MIDIService, initialSonglist: Songlist) {
         _viewModel = StateObject(wrappedValue: DocumentViewerViewModel(
             documentService: documentService,
@@ -42,6 +57,7 @@ struct DocumentViewer: View {
         self.midiService = midiService
         self.initialSong = nil
         self.initialSonglist = initialSonglist
+        self.initialLibrarySongs = nil
     }
     
     var body: some View {
@@ -70,7 +86,7 @@ struct DocumentViewer: View {
                         PunchHoleView()
                     }
                     
-                    if !viewModel.isSingleSongMode {
+                    if !viewModel.isSingleSongMode || viewModel.isLibraryMode {
                         navigationOverlay(geometry: geometry)
                     }
                 } else {
@@ -90,7 +106,7 @@ struct DocumentViewer: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
-                    if !viewModel.isSingleSongMode && viewModel.currentSong != nil {
+                    if (!viewModel.isSingleSongMode || viewModel.isLibraryMode) && viewModel.currentSong != nil {
                         Button { showingQuickJump = true } label: {
                             Image(systemName: "list.number")
                         }
@@ -110,7 +126,9 @@ struct DocumentViewer: View {
             QuickJumpView(viewModel: viewModel, isPresented: $showingQuickJump)
         }
         .onAppear {
-            if let song = initialSong {
+            if let song = initialSong, let librarySongs = initialLibrarySongs {
+                viewModel.loadSongFromLibrary(song, allSongs: librarySongs)
+            } else if let song = initialSong {
                 viewModel.loadSingleSong(song)
             } else if let songlist = initialSonglist {
                 viewModel.loadSonglist(songlist)
@@ -121,6 +139,13 @@ struct DocumentViewer: View {
         .onReceive(NotificationCenter.default.publisher(for: .viewSingleSong)) { notification in
             if let song = notification.object as? Song {
                 viewModel.loadSingleSong(song)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .viewSongFromLibrary)) { notification in
+            if let userInfo = notification.userInfo,
+               let song = userInfo["song"] as? Song,
+               let allSongs = userInfo["allSongs"] as? [Song] {
+                viewModel.loadSongFromLibrary(song, allSongs: allSongs)
             }
         }
     }
@@ -258,60 +283,74 @@ struct WelcomeView: View {
 struct QuickJumpView: View {
     @ObservedObject var viewModel: DocumentViewerViewModel
     @Binding var isPresented: Bool
-    
+
+    private var songs: [Song] {
+        if viewModel.isLibraryMode {
+            return viewModel.librarySongs
+        } else if let songlist = viewModel.currentSonglist {
+            return songlist.songs
+        }
+        return []
+    }
+
+    private var title: String {
+        if viewModel.isLibraryMode {
+            return "Song Library"
+        }
+        return viewModel.currentSonglist?.name ?? "Songlist"
+    }
+
     var body: some View {
         NavigationView {
             List {
-                if let songlist = viewModel.currentSonglist {
-                    ForEach(Array(songlist.songs.enumerated()), id: \.element.id) { index, song in
-                        Button {
-                            viewModel.jumpToSong(at: index)
-                            isPresented = false
-                        } label: {
-                            HStack {
-                                Text("\(index + 1)")
-                                    .font(.headline.monospacedDigit())
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 36, alignment: .trailing)
-                                
-                                if index == viewModel.currentSongIndex {
-                                    Image(systemName: "play.fill")
-                                        .foregroundColor(.accentColor)
+                ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                    Button {
+                        viewModel.jumpToSong(at: index)
+                        isPresented = false
+                    } label: {
+                        HStack {
+                            Text("\(index + 1)")
+                                .font(.headline.monospacedDigit())
+                                .foregroundColor(.secondary)
+                                .frame(width: 36, alignment: .trailing)
+
+                            if index == viewModel.currentSongIndex {
+                                Image(systemName: "play.fill")
+                                    .foregroundColor(.accentColor)
+                                    .font(.caption)
+                            } else {
+                                Spacer().frame(width: 16)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(song.title)
+                                    .font(.body)
+                                    .foregroundColor(index == viewModel.currentSongIndex ? .accentColor : .primary)
+
+                                if let artist = song.artist {
+                                    Text(artist)
                                         .font(.caption)
-                                } else {
-                                    Spacer().frame(width: 16)
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.title)
-                                        .font(.body)
-                                        .foregroundColor(index == viewModel.currentSongIndex ? .accentColor : .primary)
-                                    
-                                    if let artist = song.artist {
-                                        Text(artist)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                if song.hasMIDIProgramChange {
-                                    Image(systemName: "pianokeys")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(.secondary)
                                 }
                             }
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
+
+                            Spacer()
+
+                            if song.hasMIDIProgramChange {
+                                Image(systemName: "pianokeys")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
                         }
-                        .listRowBackground(index == viewModel.currentSongIndex ? 
-                            Color.accentColor.opacity(0.1) : Color.clear)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
+                    .listRowBackground(index == viewModel.currentSongIndex ?
+                        Color.accentColor.opacity(0.1) : Color.clear)
                 }
             }
             .listStyle(.plain)
-            .navigationTitle(viewModel.currentSonglist?.name ?? "Songlist")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

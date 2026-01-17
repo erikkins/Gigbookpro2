@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct ZahlStandApp: App {
@@ -25,9 +26,12 @@ struct ZahlStandApp: App {
                 .environmentObject(azureService)
                 .environmentObject(peerService)
                 .onAppear {
+                    // Prevent screen from dimming during performances
+                    UIApplication.shared.isIdleTimerDisabled = true
+
                     songlistService.documentService = documentService
                     songlistService.loadSonglists()
-                    
+
                     Task { try? await azureService.createContainerIfNeeded() }
                     documentService.copyBundledSongsIfNeeded()
                 }
@@ -148,7 +152,7 @@ struct SongLibraryView: View {
     var body: some View {
         List {
             ForEach(filteredSongs) { song in
-                SongLibraryRow(song: song, onEdit: { songToEdit = song })
+                SongLibraryRow(song: song, allSongs: filteredSongs, onEdit: { songToEdit = song })
             }
         }
         .searchable(text: $searchText, prompt: "Search songs")
@@ -158,18 +162,20 @@ struct SongLibraryView: View {
         .sheet(item: $songToEdit) { song in
             SongEditorView(song: song)
                 .environmentObject(documentService)
+                .environmentObject(midiService)
         }
     }
 }
 
 struct SongLibraryRow: View {
     @ObservedObject var song: Song
+    let allSongs: [Song]
     @EnvironmentObject var documentService: DocumentService
     @EnvironmentObject var songlistService: SonglistService
     @EnvironmentObject var midiService: MIDIService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     let onEdit: () -> Void
-    
+
     var body: some View {
         HStack {
             if horizontalSizeClass == .compact {
@@ -179,7 +185,8 @@ struct SongLibraryRow: View {
                         documentService: documentService,
                         songlistService: songlistService,
                         midiService: midiService,
-                        initialSong: song
+                        initialSong: song,
+                        initialLibrarySongs: allSongs
                     )
                 } label: {
                     songContent
@@ -189,7 +196,11 @@ struct SongLibraryRow: View {
                 songContent
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        NotificationCenter.default.post(name: .viewSingleSong, object: song)
+                        NotificationCenter.default.post(
+                            name: .viewSongFromLibrary,
+                            object: nil,
+                            userInfo: ["song": song, "allSongs": allSongs]
+                        )
                     }
             }
             
@@ -396,8 +407,9 @@ struct EmptySonglistsView: View {
     }
 }
 
-// MARK: - Notification for viewing single song
+// MARK: - Notifications
 
 extension Notification.Name {
     static let viewSingleSong = Notification.Name("viewSingleSong")
+    static let viewSongFromLibrary = Notification.Name("viewSongFromLibrary")
 }
