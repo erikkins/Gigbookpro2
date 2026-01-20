@@ -99,31 +99,42 @@ class DocumentService: ObservableObject {
                 song.pageCount = doc.pageCount
             }
             return song
-        }.sorted { $0.title < $1.title }
+        }
+        songs = sortedSongs(songs)
     }
     
     func importDocument(from url: URL, completion: @escaping (Result<Song, Error>) -> Void) {
         Task {
             do {
-                guard url.startAccessingSecurityScopedResource() else {
-                    throw NSError(domain: "Access", code: -1)
+                // Try security-scoped access (for document picker), but don't require it (for AirDrop)
+                let hasSecurityAccess = url.startAccessingSecurityScopedResource()
+                defer {
+                    if hasSecurityAccess {
+                        url.stopAccessingSecurityScopedResource()
+                    }
                 }
-                defer { url.stopAccessingSecurityScopedResource() }
-                
+
                 let fileName = url.lastPathComponent
                 let destination = musicDirectory.appendingPathComponent(fileName)
                 if fileManager.fileExists(atPath: destination.path) {
                     try fileManager.removeItem(at: destination)
                 }
                 try fileManager.copyItem(at: url, to: destination)
-                
+
                 let ext = url.pathExtension.lowercased()
                 let name = url.deletingPathExtension().lastPathComponent
-                let song = Song(title: name, fileName: name, fileExtension: ext, filePath: destination)
-                
+                let title = name.replacingOccurrences(of: "_", with: " ")
+                let song = Song(title: title, fileName: name, fileExtension: ext, filePath: destination)
+
+                // Get page count for PDFs
+                if ext == "pdf", let doc = PDFDocument(url: destination) {
+                    song.pageCount = doc.pageCount
+                }
+
                 await MainActor.run {
                     songs.append(song)
-                    songs.sort { $0.title < $1.title }
+                    sortSongsInPlace()
+                    saveSongsMetadata()
                     isLoading = false
                 }
                 completion(.success(song))
@@ -190,7 +201,7 @@ class DocumentService: ObservableObject {
         // Add to songs array if not already present
         if !songs.contains(where: { $0.fullFileName == fileName }) {
             songs.append(song)
-            songs.sort { $0.title < $1.title }
+            sortSongsInPlace()
         }
         
         // Save song metadata
@@ -227,5 +238,31 @@ class DocumentService: ObservableObject {
             print("❌ Failed to load songs metadata: \(error)")
             return []
         }
+    }
+
+    // MARK: - Sorting
+
+    /// Sorts songs case-insensitively, ignoring leading underscores/non-letter characters
+    func sortedSongs(_ songs: [Song]) -> [Song] {
+        songs.sorted { compareSongTitles($0.title, $1.title) }
+    }
+
+    func sortSongsInPlace() {
+        songs.sort { compareSongTitles($0.title, $1.title) }
+    }
+
+    private func compareSongTitles(_ a: String, _ b: String) -> Bool {
+        let normalizedA = sortableTitle(a)
+        let normalizedB = sortableTitle(b)
+        return normalizedA.localizedCaseInsensitiveCompare(normalizedB) == .orderedAscending
+    }
+
+    private func sortableTitle(_ title: String) -> String {
+        // Strip leading underscores, spaces, and punctuation (but keep numbers)
+        var result = title
+        while let first = result.first, !first.isLetter && !first.isNumber {
+            result.removeFirst()
+        }
+        return result.isEmpty ? title : result
     }
 }

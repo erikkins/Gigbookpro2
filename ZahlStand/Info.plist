@@ -49,6 +49,34 @@
     </array>
     <key>UISupportsDocumentBrowser</key>
     <true/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>PDF Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.adobe.pdf</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Word Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.microsoft.word.doc</string>
+                <string>org.openxmlformats.wordprocessingml.document</string>
+            </array>
+        </dict>
+    </array>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>GigbookPro2 uses Bluetooth to connect to MIDI controllers and sync with other devices</string>
     <key>NSLocalNetworkUsageDescription</key>

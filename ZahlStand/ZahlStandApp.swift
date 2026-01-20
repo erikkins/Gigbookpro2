@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WebKit
 
 @main
 struct ZahlStandApp: App {
@@ -44,25 +45,49 @@ struct ContentView: View {
     @EnvironmentObject var songlistService: SonglistService
     @EnvironmentObject var midiService: MIDIService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
+    @State private var importedSongToEdit: Song?
+
     var body: some View {
-        if horizontalSizeClass == .compact {
-            // iPhone: Stack navigation
-            NavigationView {
-                SidebarView()
+        Group {
+            if horizontalSizeClass == .compact {
+                // iPhone: Stack navigation
+                NavigationView {
+                    SidebarView()
+                }
+                .navigationViewStyle(.stack)
+            } else {
+                // iPad: Column navigation
+                NavigationView {
+                    SidebarView()
+                    DocumentViewer(
+                        documentService: documentService,
+                        songlistService: songlistService,
+                        midiService: midiService
+                    )
+                }
+                .navigationViewStyle(.columns)
             }
-            .navigationViewStyle(.stack)
-        } else {
-            // iPad: Column navigation
-            NavigationView {
-                SidebarView()
-                DocumentViewer(
-                    documentService: documentService,
-                    songlistService: songlistService,
-                    midiService: midiService
-                )
+        }
+        .onOpenURL { url in
+            handleIncomingFile(url: url)
+        }
+        .sheet(item: $importedSongToEdit) { song in
+            SongEditorView(song: song)
+                .environmentObject(documentService)
+                .environmentObject(midiService)
+        }
+    }
+
+    private func handleIncomingFile(url: URL) {
+        // For AirDrop files, we need to copy from the inbox to our documents
+        documentService.importDocument(from: url) { result in
+            switch result {
+            case .success(let song):
+                // Open the song editor immediately
+                importedSongToEdit = song
+            case .failure(let error):
+                print("Failed to import AirDrop file: \(error.localizedDescription)")
             }
-            .navigationViewStyle(.columns)
         }
     }
 }
@@ -321,6 +346,9 @@ struct SonglistLibraryRow: View {
     @EnvironmentObject var documentService: DocumentService
     @EnvironmentObject var midiService: MIDIService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @State private var showingShareSheet = false
+    @State private var forScoreFileURL: URL?
+    @State private var isExporting = false
     let onEdit: () -> Void
     let onClone: () -> Void
     
@@ -361,15 +389,103 @@ struct SonglistLibraryRow: View {
             Button { onClone() } label: {
                 Label("Clone Songlist", systemImage: "doc.on.doc")
             }
-            
+
+            Button {
+                Task { await exportToForScore() }
+            } label: {
+                Label(isExporting ? "Exporting..." : "Export to forScore", systemImage: "square.and.arrow.up")
+            }
+            .disabled(isExporting)
+
             Divider()
-            
+
             Button(role: .destructive) {
                 try? songlistService.deleteSonglist(songlist)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = forScoreFileURL {
+                ShareSheet(items: [url])
+            }
+        }
+        .fullScreenCover(isPresented: $isExporting) {
+            ZStack {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .tint(.white)
+                    Text("Exporting to forScore...")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .padding(24)
+                .background(Color(UIColor.systemGray5))
+                .cornerRadius(12)
+            }
+            .background(ClearBackgroundView())
+        }
+    }
+
+    private func exportToForScore() async {
+        isExporting = true
+        defer { isExporting = false }
+
+        // Build forScore 4SS XML format with embedded PDF data
+        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
+        xml += "<forScore kind=\"setlist\" version=\"1.0\" title=\"\(escapeXML(songlist.name))\">\n"
+
+        for song in songlist.songs {
+            let title = escapeXML(song.title)
+            let pdfFileName = song.fileName + ".pdf"
+
+            if let filePath = song.filePath {
+                var pdfData: Data?
+
+                if song.isPDF {
+                    // Already a PDF, just read it
+                    pdfData = try? Data(contentsOf: filePath)
+                } else if song.isWord {
+                    // Convert Word to PDF
+                    pdfData = await WordToPDFConverter.shared.convert(url: filePath)
+                }
+
+                if let data = pdfData {
+                    let base64 = data.base64EncodedString()
+                    xml += "  <score title=\"\(escapeXML(title))\" path=\"\(escapeXML(pdfFileName))\" data=\"\(base64)\" />\n"
+                } else {
+                    xml += "  <placeholder title=\"\(escapeXML(title))\" />\n"
+                }
+            } else {
+                xml += "  <placeholder title=\"\(escapeXML(title))\" />\n"
+            }
+        }
+
+        xml += "</forScore>\n"
+
+        // Write to temp file
+        let fileName = "\(songlist.name).4ss"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        do {
+            try xml.write(to: tempURL, atomically: true, encoding: .utf8)
+            forScoreFileURL = tempURL
+            showingShareSheet = true
+        } catch {
+            print("Failed to export forScore file: \(error)")
+        }
+    }
+
+    private func escapeXML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
     
     private var songlistContent: some View {
@@ -404,6 +520,93 @@ struct EmptySonglistsView: View {
             Text("Create a songlist to organize your music")
                 .foregroundColor(.secondary).multilineTextAlignment(.center).padding(.horizontal)
         }.padding()
+    }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Clear Background for FullScreenCover
+
+struct ClearBackgroundView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        DispatchQueue.main.async {
+            view.superview?.superview?.backgroundColor = .clear
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+// MARK: - Word to PDF Converter
+
+@MainActor
+class WordToPDFConverter: NSObject, WKNavigationDelegate {
+    static let shared = WordToPDFConverter()
+
+    private var webView: WKWebView?
+    private var continuation: CheckedContinuation<Data?, Never>?
+
+    func convert(url: URL) async -> Data? {
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 612, height: 792)) // Letter size
+            webView.navigationDelegate = self
+            self.webView = webView
+
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task { @MainActor in
+            // Wait a moment for rendering to complete
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+            let config = WKPDFConfiguration()
+            config.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size in points
+
+            do {
+                let pdfData = try await webView.pdf(configuration: config)
+                self.continuation?.resume(returning: pdfData)
+            } catch {
+                print("Failed to create PDF: \(error)")
+                self.continuation?.resume(returning: nil)
+            }
+
+            self.webView = nil
+            self.continuation = nil
+        }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        Task { @MainActor in
+            print("WebView failed to load: \(error)")
+            self.continuation?.resume(returning: nil)
+            self.webView = nil
+            self.continuation = nil
+        }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        Task { @MainActor in
+            print("WebView failed provisional navigation: \(error)")
+            self.continuation?.resume(returning: nil)
+            self.webView = nil
+            self.continuation = nil
+        }
     }
 }
 

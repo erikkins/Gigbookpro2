@@ -65,6 +65,9 @@ struct SongEditorView: View {
     @State private var useBankSelect: Bool = false
     @State private var bankMSBText: String = "0"
     @State private var bankLSBText: String = "0"
+
+    // Tap Tempo
+    @State private var tapTimes: [Date] = []
     
     var body: some View {
         NavigationView {
@@ -104,7 +107,36 @@ struct SongEditorView: View {
                 .autocapitalization(.words)
             TextField("Key (e.g., C, Am, G)", text: $key)
                 .autocapitalization(.allCharacters)
-            TextField("Tempo (e.g., 120 BPM)", text: $tempo)
+            HStack {
+                TextField("", text: $tempo)
+                    .keyboardType(.numberPad)
+                    .frame(width: 50)
+                    .multilineTextAlignment(.trailing)
+                    .onChange(of: tempo) { newValue in
+                        // Limit to 3 digits
+                        let filtered = newValue.filter { $0.isNumber }
+                        if filtered.count > 3 {
+                            tempo = String(filtered.prefix(3))
+                        } else if filtered != newValue {
+                            tempo = filtered
+                        }
+                    }
+                Text("BPM")
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    handleTapTempo()
+                } label: {
+                    Text("Tap")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         } header: {
             Text("Song Details")
         }
@@ -255,11 +287,51 @@ struct SongEditorView: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    private func handleTapTempo() {
+        let now = Date()
+
+        // Reset if last tap was more than 2 seconds ago
+        if let lastTap = tapTimes.last, now.timeIntervalSince(lastTap) > 2.0 {
+            tapTimes.removeAll()
+        }
+
+        tapTimes.append(now)
+
+        // Keep only the last 8 taps
+        if tapTimes.count > 8 {
+            tapTimes.removeFirst()
+        }
+
+        // Need at least 2 taps to calculate BPM
+        guard tapTimes.count >= 2 else { return }
+
+        // Calculate average interval between taps
+        var totalInterval: TimeInterval = 0
+        for i in 1..<tapTimes.count {
+            totalInterval += tapTimes[i].timeIntervalSince(tapTimes[i - 1])
+        }
+        let averageInterval = totalInterval / Double(tapTimes.count - 1)
+
+        // Convert to BPM
+        let bpm = Int(round(60.0 / averageInterval))
+
+        // Clamp to reasonable range
+        if bpm >= 20 && bpm <= 300 {
+            tempo = "\(bpm)"
+        }
+    }
     
     private func loadSongData() {
         title = song.title
         artist = song.artist ?? ""
-        tempo = song.tempo ?? ""
+        // Extract just the number from tempo (in case it has "BPM" suffix)
+        if let existingTempo = song.tempo {
+            let digits = existingTempo.filter { $0.isNumber }
+            tempo = String(digits.prefix(3))
+        } else {
+            tempo = ""
+        }
         key = song.key ?? ""
         notes = song.notes ?? ""
         
@@ -309,7 +381,8 @@ struct SongEditorView: View {
             song.midiBankMSB = nil
             song.midiBankLSB = nil
         }
-        
+
+        documentService.saveSong(song)
         dismiss()
     }
     

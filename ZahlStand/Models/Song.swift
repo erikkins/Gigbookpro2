@@ -116,4 +116,12 @@ extension Song {
     var fullFileName: String { "\(fileName).\(fileExtension)" }
     var isPDF: Bool { fileExtension.lowercased() == "pdf" }
     var isWord: Bool { ["doc", "docx"].contains(fileExtension.lowercased()) }
+
+    /// Extracts numeric BPM value from tempo string (e.g., "120 BPM" -> 120)
+    var bpmValue: Int? {
+        guard let tempo = tempo, !tempo.isEmpty else { return nil }
+        let digits = tempo.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+        guard let value = Int(digits), value > 0, value <= 300 else { return nil }
+        return value
+    }
 }

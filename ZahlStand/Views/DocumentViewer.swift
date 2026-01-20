@@ -98,10 +98,10 @@ struct DocumentViewer: View {
         .ignoresSafeArea(.container, edges: .top)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                if let song = viewModel.currentSong {
-                    Text(song.title)
-                        .font(.headline)
-                        .lineLimit(1)
+                if let song = viewModel.currentSong, let bpm = song.bpmValue {
+                    HStack {
+                        TempoIndicatorView(bpm: bpm)
+                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -224,6 +224,55 @@ struct DocumentViewer: View {
                     viewModel.nextSong()
                 }
             }
+    }
+}
+
+// MARK: - Tempo Indicator
+
+struct TempoIndicatorView: View {
+    let bpm: Int
+    @State private var isAnimating = false
+    @State private var isPaused = false
+
+    private var pulseDuration: Double {
+        60.0 / Double(bpm)
+    }
+
+    var body: some View {
+        Button {
+            isPaused.toggle()
+            if !isPaused {
+                // Restart animation when unpausing
+                isAnimating = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isAnimating = true
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 10, height: 10)
+                    .opacity(isPaused ? 0.4 : (isAnimating ? 1.0 : 0.3))
+                    .scaleEffect(isPaused ? 1.0 : (isAnimating ? 1.15 : 1.0))
+                    .animation(
+                        isPaused ? .none : .easeInOut(duration: pulseDuration / 2).repeatForever(autoreverses: true),
+                        value: isAnimating
+                    )
+
+                Text("\(bpm)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(UIColor.secondarySystemBackground))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+        .onAppear {
+            isAnimating = true
+        }
     }
 }
 
