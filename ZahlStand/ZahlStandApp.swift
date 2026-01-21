@@ -46,35 +46,64 @@ struct ContentView: View {
     @EnvironmentObject var midiService: MIDIService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var importedSongToEdit: Song?
+    @State private var showMigrationError = false
 
     var body: some View {
-        Group {
-            if horizontalSizeClass == .compact {
-                // iPhone: Stack navigation
-                NavigationView {
-                    SidebarView()
+        ZStack {
+            Group {
+                if horizontalSizeClass == .compact {
+                    // iPhone: Stack navigation
+                    NavigationView {
+                        SidebarView()
+                    }
+                    .navigationViewStyle(.stack)
+                } else {
+                    // iPad: Column navigation
+                    NavigationView {
+                        SidebarView()
+                        DocumentViewer(
+                            documentService: documentService,
+                            songlistService: songlistService,
+                            midiService: midiService
+                        )
+                    }
+                    .navigationViewStyle(.columns)
                 }
-                .navigationViewStyle(.stack)
-            } else {
-                // iPad: Column navigation
-                NavigationView {
-                    SidebarView()
-                    DocumentViewer(
-                        documentService: documentService,
-                        songlistService: songlistService,
-                        midiService: midiService
-                    )
-                }
-                .navigationViewStyle(.columns)
+            }
+            .onOpenURL { url in
+                handleIncomingFile(url: url)
+            }
+            .sheet(item: $importedSongToEdit) { song in
+                SongEditorView(song: song)
+                    .environmentObject(documentService)
+                    .environmentObject(midiService)
+            }
+
+            // Migration overlay
+            if documentService.isMigrating {
+                MigrationOverlayView(
+                    progress: documentService.migrationProgress,
+                    status: documentService.migrationStatus
+                )
             }
         }
-        .onOpenURL { url in
-            handleIncomingFile(url: url)
+        .onAppear {
+            // Check and run migration if needed
+            if documentService.needsWordFileMigration() {
+                Task {
+                    await documentService.migrateWordFilesToPDF()
+                    if documentService.migrationError != nil {
+                        showMigrationError = true
+                    }
+                }
+            }
         }
-        .sheet(item: $importedSongToEdit) { song in
-            SongEditorView(song: song)
-                .environmentObject(documentService)
-                .environmentObject(midiService)
+        .alert("Migration Error", isPresented: $showMigrationError) {
+            Button("OK", role: .cancel) {
+                documentService.migrationError = nil
+            }
+        } message: {
+            Text(documentService.migrationError ?? "Some files could not be converted.")
         }
     }
 
@@ -88,6 +117,50 @@ struct ContentView: View {
             case .failure(let error):
                 print("Failed to import AirDrop file: \(error.localizedDescription)")
             }
+        }
+    }
+}
+
+// MARK: - Migration Overlay
+
+struct MigrationOverlayView: View {
+    let progress: Double
+    let status: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Text("Migrating Documents")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+
+                Text("Converting Word documents to PDF for better performance...")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 250)
+                    .tint(.blue)
+
+                Text(status)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+
+                Text("\(Int(progress * 100))%")
+                    .font(.headline.monospacedDigit())
+                    .foregroundColor(.white)
+            }
+            .padding(32)
+            .background(Color(UIColor.systemGray5))
+            .cornerRadius(16)
         }
     }
 }
@@ -440,27 +513,13 @@ struct SonglistLibraryRow: View {
 
         for song in songlist.songs {
             let title = escapeXML(song.title)
-            let pdfFileName = song.fileName + ".pdf"
+            let pdfFileName = escapeXML(song.fullFileName)
 
-            if let filePath = song.filePath {
-                var pdfData: Data?
-
-                if song.isPDF {
-                    // Already a PDF, just read it
-                    pdfData = try? Data(contentsOf: filePath)
-                } else if song.isWord {
-                    // Convert Word to PDF
-                    pdfData = await WordToPDFConverter.shared.convert(url: filePath)
-                }
-
-                if let data = pdfData {
-                    let base64 = data.base64EncodedString()
-                    xml += "  <score title=\"\(escapeXML(title))\" path=\"\(escapeXML(pdfFileName))\" data=\"\(base64)\" />\n"
-                } else {
-                    xml += "  <placeholder title=\"\(escapeXML(title))\" />\n"
-                }
+            if let filePath = song.filePath, let pdfData = try? Data(contentsOf: filePath) {
+                let base64 = pdfData.base64EncodedString()
+                xml += "  <score title=\"\(title)\" path=\"\(pdfFileName)\" data=\"\(base64)\" />\n"
             } else {
-                xml += "  <placeholder title=\"\(escapeXML(title))\" />\n"
+                xml += "  <placeholder title=\"\(title)\" />\n"
             }
         }
 

@@ -1,6 +1,5 @@
 import SwiftUI
 import PDFKit
-import WebKit
 
 struct DocumentViewer: View {
     @StateObject private var viewModel: DocumentViewerViewModel
@@ -67,22 +66,16 @@ struct DocumentViewer: View {
                 
                 if let song = viewModel.currentSong {
                     ZStack(alignment: .leading) {
-                        if song.isPDF, let document = viewModel.currentDocument {
+                        if let document = viewModel.currentDocument {
                             PDFContainerView(
                                 document: document,
-                                onPrevious: { viewModel.previousSong() },
-                                onNext: { viewModel.nextSong() }
-                            )
-                        } else if song.isWord, let filePath = song.filePath {
-                            WordContainerView(
-                                url: filePath,
                                 onPrevious: { viewModel.previousSong() },
                                 onNext: { viewModel.nextSong() }
                             )
                         } else {
                             UnsupportedDocumentView(song: song)
                         }
-                        
+
                         PunchHoleView()
                     }
                     
@@ -608,80 +601,6 @@ class PDFKeyCommandController: KeyCommandController {
 }
 
 class NonInteractivePDFView: PDFView {
-    override var canBecomeFirstResponder: Bool { false }
-}
-
-// MARK: - Word Container
-
-struct WordContainerView: UIViewControllerRepresentable {
-    let url: URL
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-    
-    func makeUIViewController(context: Context) -> WordKeyCommandController {
-        let vc = WordKeyCommandController()
-        vc.url = url
-        vc.onPrevious = onPrevious
-        vc.onNext = onNext
-        return vc
-    }
-    
-    func updateUIViewController(_ uiViewController: WordKeyCommandController, context: Context) {
-        if uiViewController.url != url {
-            uiViewController.url = url
-            uiViewController.loadDocument()
-        }
-        uiViewController.onPrevious = onPrevious
-        uiViewController.onNext = onNext
-    }
-}
-
-class WordKeyCommandController: KeyCommandController, WKNavigationDelegate {
-    let webView = NonInteractiveWebView()
-    var url: URL?
-    private let topMarginOffset: Int = 72
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        webView.backgroundColor = .white
-        webView.navigationDelegate = self
-        
-        view.addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        
-        loadDocument()
-        
-        onScrollUp = { [weak self] in self?.scrollUp() }
-        onScrollDown = { [weak self] in self?.scrollDown() }
-    }
-    
-    func loadDocument() {
-        guard let url = url else { return }
-        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-    }
-    
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        let js = "window.scrollTo(0, \(topMarginOffset));"
-        webView.evaluateJavaScript(js, completionHandler: nil)
-    }
-    
-    private func scrollUp() {
-        webView.evaluateJavaScript("window.scrollBy(0, -window.innerHeight * 0.8);", completionHandler: nil)
-    }
-    
-    private func scrollDown() {
-        webView.evaluateJavaScript("window.scrollBy(0, window.innerHeight * 0.8);", completionHandler: nil)
-    }
-}
-
-class NonInteractiveWebView: WKWebView {
     override var canBecomeFirstResponder: Bool { false }
 }
 
