@@ -162,12 +162,12 @@ class AzureStorageService: ObservableObject {
     
     // MARK: - Upload
     
-    func uploadSonglist(_ songlist: Songlist, documentService: DocumentService) async throws {
+    func uploadSonglist(_ songlist: Songlist, documentService: DocumentService, annotationService: AnnotationService? = nil) async throws {
         isUploading = true
         uploadProgress = 0
         defer { isUploading = false }
 
-        let data = try exportSonglist(songlist, documentService: documentService)
+        let data = try exportSonglist(songlist, documentService: documentService, annotationService: annotationService)
 
         // Sanitize blob name
         let sanitizedName = songlist.name
@@ -217,7 +217,7 @@ class AzureStorageService: ObservableObject {
         uploadProgress = 1
     }
     
-    private func exportSonglist(_ songlist: Songlist, documentService: DocumentService) throws -> Data {
+    private func exportSonglist(_ songlist: Songlist, documentService: DocumentService, annotationService: AnnotationService? = nil) throws -> Data {
         var songs: [[String: Any]] = []
         for song in songlist.songs {
             var s: [String: Any] = ["id": song.id, "title": song.title,
@@ -256,12 +256,48 @@ class AzureStorageService: ObservableObject {
                 if let v = legacyProfile?.bankMSB ?? song.midiBankMSB { s["midiBankMSB"] = v }
                 if let v = legacyProfile?.bankLSB ?? song.midiBankLSB { s["midiBankLSB"] = v }
             }
+
+            // Export annotation profiles (version 4+)
+            if let annotationService = annotationService {
+                // Temporarily load annotations for this song
+                annotationService.loadAnnotations(for: song.fullFileName)
+                let annotationProfiles = annotationService.exportProfiles()
+                if !annotationProfiles.isEmpty {
+                    let profilesData = annotationProfiles.map { profile -> [String: Any] in
+                        var p: [String: Any] = [
+                            "id": profile.id,
+                            "name": profile.name,
+                            "isDefault": profile.isDefault
+                        ]
+                        if let ownerName = profile.ownerName {
+                            p["ownerName"] = ownerName
+                        }
+                        if !profile.annotations.isEmpty {
+                            p["annotations"] = profile.annotations.map { ann -> [String: Any] in
+                                [
+                                    "id": ann.id,
+                                    "pageIndex": ann.pageIndex,
+                                    "relativeX": ann.relativeX,
+                                    "relativeY": ann.relativeY,
+                                    "text": ann.text,
+                                    "color": ann.color.rawValue,
+                                    "fontSize": ann.fontSize.rawValue,
+                                    "isBold": ann.isBold
+                                ]
+                            }
+                        }
+                        return p
+                    }
+                    s["annotationProfiles"] = profilesData
+                }
+            }
+
             if let path = song.filePath, let data = try? Data(contentsOf: path) {
                 s["fileData"] = data.base64EncodedString()
             }
             songs.append(s)
         }
-        let dict: [String: Any] = ["version": 3, "name": songlist.name, "id": songlist.id,
+        let dict: [String: Any] = ["version": 4, "name": songlist.name, "id": songlist.id,
                                    "event": songlist.event as Any, "venue": songlist.venue as Any,
                                    "dateCreated": ISO8601DateFormatter().string(from: songlist.dateCreated),
                                    "dateModified": ISO8601DateFormatter().string(from: songlist.dateModified),
@@ -424,7 +460,8 @@ class AzureStorageService: ObservableObject {
     }
     
     func downloadAndImportSonglist(name: String, documentService: DocumentService,
-                                   songlistService: SonglistService) async throws -> Songlist {
+                                   songlistService: SonglistService,
+                                   annotationService: AnnotationService? = nil) async throws -> Songlist {
         let data = try await downloadNewBlob(name: name)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AzureError.invalidFormat("JSON")
@@ -446,12 +483,20 @@ class AzureStorageService: ObservableObject {
                 if let existing = existing {
                     // Song exists - apply MIDI settings from cloud if present
                     applyMIDISettings(from: s, to: existing)
+                    // Apply annotation profiles if present
+                    if let annotationService = annotationService {
+                        applyAnnotationSettings(from: s, to: existing, annotationService: annotationService)
+                    }
                     documentService.saveSong(existing)
                     ids.append(existing.id)
                 } else if let b64 = s["fileData"] as? String, let fileData = Data(base64Encoded: b64) {
                     // New song - import file and apply MIDI settings
                     let song = try await documentService.importEmbeddedFile(name: s["title"] as? String ?? "", fileName: fn, data: fileData)
                     applyMIDISettings(from: s, to: song)
+                    // Apply annotation profiles if present
+                    if let annotationService = annotationService {
+                        applyAnnotationSettings(from: s, to: song, annotationService: annotationService)
+                    }
                     documentService.saveSong(song)
                     ids.append(song.id)
                 }
@@ -528,6 +573,55 @@ class AzureStorageService: ObservableObject {
                 bankLSB: song.midiBankLSB
             )
             song.midiProfiles = [profile]
+        }
+    }
+
+    /// Apply annotation settings from cloud data to a song
+    private func applyAnnotationSettings(from cloudData: [String: Any], to song: Song, annotationService: AnnotationService) {
+        guard let profilesData = cloudData["annotationProfiles"] as? [[String: Any]], !profilesData.isEmpty else {
+            return
+        }
+
+        // Parse annotation profiles from cloud data
+        var profiles: [AnnotationProfile] = []
+        for profileDict in profilesData {
+            let profileId = profileDict["id"] as? String ?? UUID().uuidString
+            let name = profileDict["name"] as? String ?? "Imported"
+            let ownerName = profileDict["ownerName"] as? String
+            let isDefault = profileDict["isDefault"] as? Bool ?? false
+
+            var annotations: [PDFAnnotation] = []
+            if let annotationsData = profileDict["annotations"] as? [[String: Any]] {
+                for annDict in annotationsData {
+                    let annotation = PDFAnnotation(
+                        id: annDict["id"] as? String ?? UUID().uuidString,
+                        pageIndex: annDict["pageIndex"] as? Int ?? 0,
+                        relativeX: annDict["relativeX"] as? CGFloat ?? 0.5,
+                        relativeY: annDict["relativeY"] as? CGFloat ?? 0.5,
+                        text: annDict["text"] as? String ?? "",
+                        color: AnnotationColor(rawValue: annDict["color"] as? String ?? "yellow") ?? .yellow,
+                        fontSize: AnnotationFontSize(rawValue: annDict["fontSize"] as? String ?? "small") ?? .small,
+                        isBold: annDict["isBold"] as? Bool ?? false
+                    )
+                    annotations.append(annotation)
+                }
+            }
+
+            let profile = AnnotationProfile(
+                id: profileId,
+                name: name,
+                ownerName: ownerName,
+                isDefault: isDefault,
+                annotations: annotations
+            )
+            profiles.append(profile)
+        }
+
+        // Import the profiles into the annotation service
+        if !profiles.isEmpty {
+            annotationService.loadAnnotations(for: song.fullFileName)
+            annotationService.importProfiles(profiles, merge: true)
+            print("📝 Annotations: \(song.title) → \(profiles.count) profiles imported")
         }
     }
 }

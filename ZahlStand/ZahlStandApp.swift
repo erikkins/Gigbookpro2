@@ -10,6 +10,7 @@ struct ZahlStandApp: App {
     @StateObject private var azureService: AzureStorageService
     @StateObject private var peerService = PeerConnectivityService()
     @StateObject private var overridesService = LocalMIDIOverridesService()
+    @StateObject private var annotationService = AnnotationService()
     
     init() {
         _azureService = StateObject(wrappedValue: AzureStorageService(
@@ -28,6 +29,7 @@ struct ZahlStandApp: App {
                 .environmentObject(azureService)
                 .environmentObject(peerService)
                 .environmentObject(overridesService)
+                .environmentObject(annotationService)
                 .onAppear {
                     // Prevent screen from dimming during performances
                     UIApplication.shared.isIdleTimerDisabled = true

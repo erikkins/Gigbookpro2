@@ -14,6 +14,11 @@
 		AA0024 /* MIDIProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0024 /* MIDIProfile.swift */; };
 		AA0025 /* LocalMIDIOverride.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0025 /* LocalMIDIOverride.swift */; };
 		AA0026 /* LocalMIDIOverridesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0026 /* LocalMIDIOverridesService.swift */; };
+		AA0027 /* PDFAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0027 /* PDFAnnotation.swift */; };
+		AA0028 /* AnnotationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0028 /* AnnotationService.swift */; };
+		AA0029 /* AnnotationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0029 /* AnnotationEditorView.swift */; };
+		AA0030 /* AnnotationOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0030 /* AnnotationOverlayView.swift */; };
+		AA0031 /* AnnotationProfilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0031 /* AnnotationProfilePicker.swift */; };
 		AA0005 /* MIDIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0005 /* MIDIService.swift */; };
 		AA0006 /* DocumentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0006 /* DocumentService.swift */; };
 		AA0007 /* SonglistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0007 /* SonglistService.swift */; };
@@ -61,6 +66,11 @@
 		BB0024 /* MIDIProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIProfile.swift; sourceTree = "<group>"; };
 		BB0025 /* LocalMIDIOverride.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMIDIOverride.swift; sourceTree = "<group>"; };
 		BB0026 /* LocalMIDIOverridesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMIDIOverridesService.swift; sourceTree = "<group>"; };
+		BB0027 /* PDFAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFAnnotation.swift; sourceTree = "<group>"; };
+		BB0028 /* AnnotationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationService.swift; sourceTree = "<group>"; };
+		BB0029 /* AnnotationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationEditorView.swift; sourceTree = "<group>"; };
+		BB0030 /* AnnotationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationOverlayView.swift; sourceTree = "<group>"; };
+		BB0031 /* AnnotationProfilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationProfilePicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +92,7 @@
 				BB0004 /* Songlist.swift */,
 				BB0024 /* MIDIProfile.swift */,
 				BB0025 /* LocalMIDIOverride.swift */,
+				BB0027 /* PDFAnnotation.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -112,6 +123,7 @@
 				BB0009 /* PeerConnectivityService.swift */,
 				BB0021 /* GzipHelper.swift */,
 				BB0026 /* LocalMIDIOverridesService.swift */,
+				BB0028 /* AnnotationService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -135,6 +147,9 @@
 				BB0019 /* SongEditorView.swift */,
 				BB0020 /* SonglistEditorView.swift */,
 				BB0023 /* PunchHoleView.swift */,
+				BB0029 /* AnnotationEditorView.swift */,
+				BB0030 /* AnnotationOverlayView.swift */,
+				BB0031 /* AnnotationProfilePicker.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -253,6 +268,11 @@
 				AA0024 /* MIDIProfile.swift in Sources */,
 				AA0025 /* LocalMIDIOverride.swift in Sources */,
 				AA0026 /* LocalMIDIOverridesService.swift in Sources */,
+				AA0027 /* PDFAnnotation.swift in Sources */,
+				AA0028 /* AnnotationService.swift in Sources */,
+				AA0029 /* AnnotationEditorView.swift in Sources */,
+				AA0030 /* AnnotationOverlayView.swift in Sources */,
+				AA0031 /* AnnotationProfilePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,11 +1,24 @@
 import SwiftUI
 import PDFKit
 
+/// Context for presenting the annotation editor
+struct AnnotationEditorContext: Identifiable {
+    let id = UUID()
+    let pageIndex: Int
+    let relativeX: CGFloat
+    let relativeY: CGFloat
+    let existingAnnotation: PDFAnnotation?
+}
+
 struct DocumentViewer: View {
     @StateObject private var viewModel: DocumentViewerViewModel
     @EnvironmentObject var overridesService: LocalMIDIOverridesService
+    @EnvironmentObject var annotationService: AnnotationService
     @State private var showingMIDISettings = false
     @State private var showingQuickJump = false
+    @State private var showingAnnotationProfiles = false
+    @State private var annotationEditorContext: AnnotationEditorContext?
+    @State private var pdfViewController: PDFKeyCommandController?
 
     let midiService: MIDIService
     private let initialSong: Song?
@@ -71,8 +84,35 @@ struct DocumentViewer: View {
                             PDFContainerView(
                                 document: document,
                                 onPrevious: { viewModel.previousSong() },
-                                onNext: { viewModel.nextSong() }
+                                onNext: { viewModel.nextSong() },
+                                onLongPress: { pageIndex, x, y in
+                                    annotationEditorContext = AnnotationEditorContext(
+                                        pageIndex: pageIndex,
+                                        relativeX: x,
+                                        relativeY: y,
+                                        existingAnnotation: nil
+                                    )
+                                },
+                                onViewControllerReady: { vc in
+                                    pdfViewController = vc
+                                }
                             )
+
+                            // Annotation overlay
+                            if let vc = pdfViewController {
+                                AnnotationOverlayView(
+                                    annotationService: annotationService,
+                                    pdfViewController: vc,
+                                    onAnnotationTap: { annotation in
+                                        annotationEditorContext = AnnotationEditorContext(
+                                            pageIndex: annotation.pageIndex,
+                                            relativeX: annotation.relativeX,
+                                            relativeY: annotation.relativeY,
+                                            existingAnnotation: annotation
+                                        )
+                                    }
+                                )
+                            }
                         } else {
                             UnsupportedDocumentView(song: song)
                         }
@@ -104,6 +144,12 @@ struct DocumentViewer: View {
                             Image(systemName: "list.number")
                         }
                     }
+                    if viewModel.currentSong != nil {
+                        Button { showingAnnotationProfiles = true } label: {
+                            Image(systemName: annotationService.hasAnnotations ? "note.text" : "note.text.badge.plus")
+                                .foregroundColor(annotationService.hasAnnotations ? .orange : .primary)
+                        }
+                    }
                     Button { showingMIDISettings = true } label: {
                         Image(systemName: viewModel.midiConnected ? "pianokeys.inverse" : "pianokeys")
                             .foregroundColor(viewModel.midiConnected ? .green : .primary)
@@ -118,6 +164,18 @@ struct DocumentViewer: View {
         .sheet(isPresented: $showingQuickJump) {
             QuickJumpView(viewModel: viewModel, isPresented: $showingQuickJump)
         }
+        .sheet(item: $annotationEditorContext) { context in
+            AnnotationEditorView(
+                annotationService: annotationService,
+                pageIndex: context.pageIndex,
+                relativeX: context.relativeX,
+                relativeY: context.relativeY,
+                existingAnnotation: context.existingAnnotation
+            )
+        }
+        .sheet(isPresented: $showingAnnotationProfiles) {
+            AnnotationProfilePicker(annotationService: annotationService)
+        }
         .onAppear {
             if let song = initialSong, let librarySongs = initialLibrarySongs {
                 viewModel.loadSongFromLibrary(song, allSongs: librarySongs)
@@ -127,6 +185,18 @@ struct DocumentViewer: View {
                 viewModel.loadSonglist(songlist)
             } else {
                 showSidebarIfNeeded()
+            }
+            // Load annotations for current song
+            if let song = viewModel.currentSong {
+                annotationService.loadAnnotations(for: song.fullFileName)
+            }
+        }
+        .onChange(of: viewModel.currentSong?.id) { _ in
+            // Load annotations when song changes
+            if let song = viewModel.currentSong {
+                annotationService.loadAnnotations(for: song.fullFileName)
+            } else {
+                annotationService.clearCurrentAnnotations()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .viewSingleSong)) { notification in
@@ -509,15 +579,21 @@ struct PDFContainerView: UIViewControllerRepresentable {
     let document: PDFDocument
     let onPrevious: () -> Void
     let onNext: () -> Void
-    
+    var onLongPress: ((Int, CGFloat, CGFloat) -> Void)?
+    var onViewControllerReady: ((PDFKeyCommandController) -> Void)?
+
     func makeUIViewController(context: Context) -> PDFKeyCommandController {
         let vc = PDFKeyCommandController()
         vc.document = document
         vc.onPrevious = onPrevious
         vc.onNext = onNext
+        vc.onLongPress = onLongPress
+        DispatchQueue.main.async {
+            onViewControllerReady?(vc)
+        }
         return vc
     }
-    
+
     func updateUIViewController(_ uiViewController: PDFKeyCommandController, context: Context) {
         if uiViewController.pdfView.document != document {
             uiViewController.pdfView.document = document
@@ -526,12 +602,17 @@ struct PDFContainerView: UIViewControllerRepresentable {
         }
         uiViewController.onPrevious = onPrevious
         uiViewController.onNext = onNext
+        uiViewController.onLongPress = onLongPress
     }
 }
 
 class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate {
     let pdfView = NonInteractivePDFView()
     private let topMarginOffset: CGFloat = 36
+    private var selectionOverlay: SelectionBlockingOverlay?
+
+    /// Callback for long press annotation creation: (pageIndex, relativeX, relativeY)
+    var onLongPress: ((Int, CGFloat, CGFloat) -> Void)?
 
     var document: PDFDocument? {
         didSet {
@@ -557,6 +638,19 @@ class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate
             pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
 
+        // Add overlay to block text selection while allowing scroll
+        selectionOverlay = SelectionBlockingOverlay(frame: .zero)
+        selectionOverlay!.translatesAutoresizingMaskIntoConstraints = false
+        selectionOverlay!.backgroundColor = .clear
+        selectionOverlay!.scrollView = findScrollView(in: pdfView)
+        view.addSubview(selectionOverlay!)
+        NSLayoutConstraint.activate([
+            selectionOverlay!.topAnchor.constraint(equalTo: view.topAnchor),
+            selectionOverlay!.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            selectionOverlay!.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            selectionOverlay!.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+
         onScrollUp = { [weak self] in self?.scrollUp() }
         onScrollDown = { [weak self] in self?.scrollDown() }
 
@@ -564,12 +658,18 @@ class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate
         let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeLeft))
         swipeLeft.direction = .left
         swipeLeft.delegate = self
-        view.addGestureRecognizer(swipeLeft)
+        selectionOverlay!.addGestureRecognizer(swipeLeft)
 
         let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeRight))
         swipeRight.direction = .right
         swipeRight.delegate = self
-        view.addGestureRecognizer(swipeRight)
+        selectionOverlay!.addGestureRecognizer(swipeRight)
+
+        // Add long press gesture for annotation creation
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.5
+        longPress.delegate = self
+        selectionOverlay!.addGestureRecognizer(longPress)
     }
 
     @objc private func handleSwipeLeft() {
@@ -580,6 +680,47 @@ class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate
         onPrevious?()
     }
 
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        // Convert from overlay coordinates to PDF view coordinates
+        let overlayLocation = gesture.location(in: gesture.view)
+        let location = gesture.view?.convert(overlayLocation, to: pdfView) ?? overlayLocation
+        if let coords = convertToPageCoordinates(location) {
+            onLongPress?(coords.pageIndex, coords.relativeX, coords.relativeY)
+        }
+    }
+
+    // MARK: - Coordinate Conversion
+
+    /// Convert screen point to PDF page coordinates (pageIndex, relativeX, relativeY)
+    func convertToPageCoordinates(_ screenPoint: CGPoint) -> (pageIndex: Int, relativeX: CGFloat, relativeY: CGFloat)? {
+        guard let page = pdfView.page(for: screenPoint, nearest: true),
+              let document = pdfView.document else { return nil }
+
+        let pageIndex = document.index(for: page)
+        let pagePoint = pdfView.convert(screenPoint, to: page)
+        let pageBounds = page.bounds(for: .mediaBox)
+
+        // Clamp values to 0.0 - 1.0 range
+        let relativeX = max(0, min(1, pagePoint.x / pageBounds.width))
+        let relativeY = max(0, min(1, pagePoint.y / pageBounds.height))
+
+        return (pageIndex, relativeX, relativeY)
+    }
+
+    /// Convert PDF page coordinates back to screen coordinates
+    func convertToScreenCoordinates(pageIndex: Int, relativeX: CGFloat, relativeY: CGFloat) -> CGPoint? {
+        guard let document = pdfView.document,
+              let page = document.page(at: pageIndex) else { return nil }
+
+        let pageBounds = page.bounds(for: .mediaBox)
+        let pagePoint = CGPoint(
+            x: relativeX * pageBounds.width,
+            y: relativeY * pageBounds.height
+        )
+        return pdfView.convert(pagePoint, from: page)
+    }
+
     // Allow swipe gestures to work simultaneously with scroll view
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return true
@@ -587,6 +728,10 @@ class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        // Ensure overlay has scroll view reference
+        if selectionOverlay?.scrollView == nil {
+            selectionOverlay?.scrollView = findScrollView(in: pdfView)
+        }
         scrollUpToHideMargin()
     }
     
@@ -628,6 +773,115 @@ class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate
 
 class NonInteractivePDFView: PDFView {
     override var canBecomeFirstResponder: Bool { false }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        // Block all selection and copy-related actions
+        return false
+    }
+}
+
+/// Overlay that intercepts taps but passes scroll gestures through
+class SelectionBlockingOverlay: UIView, UIGestureRecognizerDelegate {
+    private var panGesture: UIPanGestureRecognizer!
+    weak var scrollView: UIScrollView?
+    private var lastVelocity: CGFloat = 0
+    private var displayLink: CADisplayLink?
+    private var decelerationVelocity: CGFloat = 0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        // Add pan gesture to forward scrolling
+        panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        panGesture.delegate = self
+        addGestureRecognizer(panGesture)
+    }
+
+    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+        guard let scrollView = scrollView else { return }
+
+        let translation = gesture.translation(in: self)
+        let velocity = gesture.velocity(in: self)
+
+        switch gesture.state {
+        case .began:
+            stopDeceleration()
+        case .changed:
+            var offset = scrollView.contentOffset
+            offset.y -= translation.y
+            offset.y = max(0, min(offset.y, scrollView.contentSize.height - scrollView.bounds.height))
+            scrollView.contentOffset = offset
+            gesture.setTranslation(.zero, in: self)
+            lastVelocity = velocity.y
+        case .ended, .cancelled:
+            // Start momentum scrolling
+            startDeceleration(velocity: -velocity.y)
+        default:
+            break
+        }
+    }
+
+    private func startDeceleration(velocity: CGFloat) {
+        decelerationVelocity = velocity
+        displayLink = CADisplayLink(target: self, selector: #selector(updateDeceleration))
+        displayLink?.add(to: .main, forMode: .common)
+    }
+
+    private func stopDeceleration() {
+        displayLink?.invalidate()
+        displayLink = nil
+        decelerationVelocity = 0
+    }
+
+    @objc private func updateDeceleration() {
+        guard let scrollView = scrollView else {
+            stopDeceleration()
+            return
+        }
+
+        // Apply deceleration
+        let deceleration: CGFloat = 0.95
+        decelerationVelocity *= deceleration
+
+        // Stop if velocity is very small
+        if abs(decelerationVelocity) < 1 {
+            stopDeceleration()
+            return
+        }
+
+        // Update scroll position
+        var offset = scrollView.contentOffset
+        offset.y += decelerationVelocity * CGFloat(displayLink?.duration ?? 0.016)
+        offset.y = max(0, min(offset.y, scrollView.contentSize.height - scrollView.bounds.height))
+        scrollView.contentOffset = offset
+
+        // Stop at bounds
+        if offset.y <= 0 || offset.y >= scrollView.contentSize.height - scrollView.bounds.height {
+            stopDeceleration()
+        }
+    }
+
+    // Allow pan gesture to work simultaneously with other gestures
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Return self to capture touches (blocking PDF text selection)
+        return self
+    }
+
+    deinit {
+        stopDeceleration()
+    }
 }
 
 // MARK: - Unsupported Document

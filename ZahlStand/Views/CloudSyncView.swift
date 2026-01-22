@@ -4,6 +4,7 @@ struct CloudSyncView: View {
     @EnvironmentObject var azureService: AzureStorageService
     @EnvironmentObject var songlistService: SonglistService
     @EnvironmentObject var documentService: DocumentService
+    @EnvironmentObject var annotationService: AnnotationService
     @Environment(\.dismiss) var dismiss
     
     @State private var selectedTab = 0
@@ -455,7 +456,7 @@ struct CloudSyncView: View {
             )
             
             migrationStatus = "Uploading to cloud..."
-            try await azureService.uploadSonglist(songlist, documentService: documentService)
+            try await azureService.uploadSonglist(songlist, documentService: documentService, annotationService: annotationService)
             migrationStatus = "✅ '\(songlist.name)' migrated with \(songlist.songCount) songs!"
             
             await loadNewBlobs()
@@ -491,7 +492,8 @@ struct CloudSyncView: View {
             let songlist = try await azureService.downloadAndImportSonglist(
                 name: blob,
                 documentService: documentService,
-                songlistService: songlistService
+                songlistService: songlistService,
+                annotationService: annotationService
             )
             errorMessage = "✅ Downloaded '\(songlist.name)' with \(songlist.songCount) songs"
         } catch {
@@ -501,7 +503,7 @@ struct CloudSyncView: View {
     
     private func uploadSonglist(_ songlist: Songlist) async {
         do {
-            try await azureService.uploadSonglist(songlist, documentService: documentService)
+            try await azureService.uploadSonglist(songlist, documentService: documentService, annotationService: annotationService)
             await loadNewBlobs()
             errorMessage = "✅ Uploaded '\(songlist.name)'"
         } catch {
