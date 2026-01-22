@@ -18,10 +18,13 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
     var notes: String?
     
     // MIDI Program Change settings for connected instruments
-    @Published var midiChannel: Int?          // 0-15 (displayed as 1-16)
-    @Published var midiProgramNumber: Int?    // 0-127 (program/patch number)
-    @Published var midiBankMSB: Int?          // 0-127 (bank select MSB - CC 0)
-    @Published var midiBankLSB: Int?          // 0-127 (bank select LSB - CC 32)
+    @Published var midiChannel: Int?          // 0-15 (displayed as 1-16) - Legacy field
+    @Published var midiProgramNumber: Int?    // 0-127 (program/patch number) - Legacy field
+    @Published var midiBankMSB: Int?          // 0-127 (bank select MSB - CC 0) - Legacy field
+    @Published var midiBankLSB: Int?          // 0-127 (bank select LSB - CC 32) - Legacy field
+
+    // Multi-instrument MIDI profiles (new format)
+    @Published var midiProfiles: [MIDIProfile] = []
     
     init(id: String = UUID().uuidString, title: String, fileName: String, 
          fileExtension: String, artist: String? = nil, filePath: URL? = nil) {
@@ -42,6 +45,7 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
         case id, title, artist, fileName, fileExtension, filePath
         case dateAdded, lastModified, tags, pageCount, duration, tempo, key, notes
         case midiChannel, midiProgramNumber, midiBankMSB, midiBankLSB
+        case midiProfiles
     }
     
     required init(from decoder: Decoder) throws {
@@ -66,6 +70,21 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
         midiProgramNumber = try container.decodeIfPresent(Int.self, forKey: .midiProgramNumber)
         midiBankMSB = try container.decodeIfPresent(Int.self, forKey: .midiBankMSB)
         midiBankLSB = try container.decodeIfPresent(Int.self, forKey: .midiBankLSB)
+
+        // Decode profiles if present, otherwise migrate from legacy fields
+        if let profiles = try container.decodeIfPresent([MIDIProfile].self, forKey: .midiProfiles), !profiles.isEmpty {
+            midiProfiles = profiles
+        } else if let legacyProfile = MIDIProfile.fromLegacy(
+            channel: midiChannel,
+            program: midiProgramNumber,
+            bankMSB: midiBankMSB,
+            bankLSB: midiBankLSB
+        ) {
+            // Migrate legacy fields to keyboard profile
+            midiProfiles = [legacyProfile]
+        } else {
+            midiProfiles = []
+        }
     }
     
     func encode(to encoder: Encoder) throws {
@@ -84,19 +103,87 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
         try container.encodeIfPresent(tempo, forKey: .tempo)
         try container.encodeIfPresent(key, forKey: .key)
         try container.encodeIfPresent(notes, forKey: .notes)
-        try container.encodeIfPresent(midiChannel, forKey: .midiChannel)
-        try container.encodeIfPresent(midiProgramNumber, forKey: .midiProgramNumber)
-        try container.encodeIfPresent(midiBankMSB, forKey: .midiBankMSB)
-        try container.encodeIfPresent(midiBankLSB, forKey: .midiBankLSB)
+        // Write legacy fields for backward compatibility (use keyboard profile if available)
+        let legacyProfile = midiProfile(for: .keyboard) ?? primaryMIDIProfile
+        try container.encodeIfPresent(legacyProfile?.channel ?? midiChannel, forKey: .midiChannel)
+        try container.encodeIfPresent(legacyProfile?.programNumber ?? midiProgramNumber, forKey: .midiProgramNumber)
+        try container.encodeIfPresent(legacyProfile?.bankMSB ?? midiBankMSB, forKey: .midiBankMSB)
+        try container.encodeIfPresent(legacyProfile?.bankLSB ?? midiBankLSB, forKey: .midiBankLSB)
+
+        // Write new format profiles
+        if !midiProfiles.isEmpty {
+            try container.encode(midiProfiles, forKey: .midiProfiles)
+        }
     }
     
-    // Check if song has MIDI program change configured
+    // MARK: - MIDI Profile Methods
+
+    /// Check if song has MIDI program change configured (legacy or new format)
     var hasMIDIProgramChange: Bool {
-        midiProgramNumber != nil
+        hasAnyMIDIProfile || midiProgramNumber != nil
     }
-    
-    // Generate MIDI program change description
+
+    /// Check if song has any MIDI profiles configured
+    var hasAnyMIDIProfile: Bool {
+        !midiProfiles.isEmpty && midiProfiles.contains { $0.hasProgramChange }
+    }
+
+    /// Get the primary (first) MIDI profile
+    var primaryMIDIProfile: MIDIProfile? {
+        midiProfiles.first { $0.hasProgramChange }
+    }
+
+    /// Get MIDI profile for a specific instrument type
+    func midiProfile(for type: MIDIInstrumentType) -> MIDIProfile? {
+        midiProfiles.first { $0.instrumentType == type && $0.hasProgramChange }
+    }
+
+    /// Set or update a MIDI profile for an instrument type
+    func setMIDIProfile(_ profile: MIDIProfile) {
+        if let index = midiProfiles.firstIndex(where: { $0.instrumentType == profile.instrumentType }) {
+            midiProfiles[index] = profile
+        } else {
+            midiProfiles.append(profile)
+        }
+
+        // Also update legacy fields for keyboard profile
+        if profile.instrumentType == .keyboard {
+            midiChannel = profile.channel
+            midiProgramNumber = profile.programNumber
+            midiBankMSB = profile.bankMSB
+            midiBankLSB = profile.bankLSB
+        }
+
+        lastModified = Date()
+    }
+
+    /// Remove MIDI profile for an instrument type
+    func removeMIDIProfile(for type: MIDIInstrumentType) {
+        midiProfiles.removeAll { $0.instrumentType == type }
+        if type == .keyboard {
+            midiChannel = nil
+            midiProgramNumber = nil
+            midiBankMSB = nil
+            midiBankLSB = nil
+        }
+        lastModified = Date()
+    }
+
+    /// Clear all MIDI profiles
+    func clearAllMIDIProfiles() {
+        midiProfiles.removeAll()
+        midiChannel = nil
+        midiProgramNumber = nil
+        midiBankMSB = nil
+        midiBankLSB = nil
+        lastModified = Date()
+    }
+
+    // Generate MIDI program change description (uses primary profile or legacy fields)
     var midiProgramDescription: String? {
+        if let profile = primaryMIDIProfile {
+            return profile.description
+        }
         guard let program = midiProgramNumber else { return nil }
         let channel = (midiChannel ?? 0) + 1
         if let msb = midiBankMSB, let lsb = midiBankLSB {

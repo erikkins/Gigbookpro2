@@ -9,6 +9,7 @@ struct ZahlStandApp: App {
     @StateObject private var midiService = MIDIService()
     @StateObject private var azureService: AzureStorageService
     @StateObject private var peerService = PeerConnectivityService()
+    @StateObject private var overridesService = LocalMIDIOverridesService()
     
     init() {
         _azureService = StateObject(wrappedValue: AzureStorageService(
@@ -26,12 +27,16 @@ struct ZahlStandApp: App {
                 .environmentObject(midiService)
                 .environmentObject(azureService)
                 .environmentObject(peerService)
+                .environmentObject(overridesService)
                 .onAppear {
                     // Prevent screen from dimming during performances
                     UIApplication.shared.isIdleTimerDisabled = true
 
                     songlistService.documentService = documentService
                     songlistService.loadSonglists()
+
+                    // Wire up MIDI service to use local overrides
+                    midiService.overridesService = overridesService
 
                     Task { try? await azureService.createContainerIfNeeded() }
                     documentService.copyBundledSongsIfNeeded()
@@ -44,6 +49,7 @@ struct ContentView: View {
     @EnvironmentObject var documentService: DocumentService
     @EnvironmentObject var songlistService: SonglistService
     @EnvironmentObject var midiService: MIDIService
+    @EnvironmentObject var overridesService: LocalMIDIOverridesService
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var importedSongToEdit: Song?
     @State private var showMigrationError = false
@@ -77,6 +83,7 @@ struct ContentView: View {
                 SongEditorView(song: song)
                     .environmentObject(documentService)
                     .environmentObject(midiService)
+                    .environmentObject(overridesService)
             }
 
             // Migration overlay
@@ -239,6 +246,7 @@ struct SongLibraryView: View {
     @EnvironmentObject var documentService: DocumentService
     @EnvironmentObject var songlistService: SonglistService
     @EnvironmentObject var midiService: MIDIService
+    @EnvironmentObject var overridesService: LocalMIDIOverridesService
     @State private var searchText = ""
     @State private var songToEdit: Song?
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -261,6 +269,7 @@ struct SongLibraryView: View {
             SongEditorView(song: song)
                 .environmentObject(documentService)
                 .environmentObject(midiService)
+                .environmentObject(overridesService)
         }
     }
 }

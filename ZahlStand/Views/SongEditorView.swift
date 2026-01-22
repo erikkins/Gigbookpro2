@@ -28,15 +28,23 @@ struct NumericTextField: UIViewRepresentable {
     
     class Coordinator: NSObject, UITextFieldDelegate {
         var parent: NumericTextField
-        
+
         init(_ parent: NumericTextField) {
             self.parent = parent
         }
-        
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            // Move cursor to end when field is focused
+            DispatchQueue.main.async {
+                let endPosition = textField.endOfDocument
+                textField.selectedTextRange = textField.textRange(from: endPosition, to: endPosition)
+            }
+        }
+
         func textFieldDidChangeSelection(_ textField: UITextField) {
             parent.text = textField.text ?? ""
         }
-        
+
         func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
             // Only allow digits
             let allowedCharacters = CharacterSet.decimalDigits
@@ -50,14 +58,15 @@ struct SongEditorView: View {
     @ObservedObject var song: Song
     @EnvironmentObject var documentService: DocumentService
     @EnvironmentObject var midiService: MIDIService
+    @EnvironmentObject var overridesService: LocalMIDIOverridesService
     @Environment(\.dismiss) var dismiss
-    
+
     @State private var title: String = ""
     @State private var artist: String = ""
     @State private var tempo: String = ""
     @State private var key: String = ""
     @State private var notes: String = ""
-    
+
     // MIDI Settings
     @State private var midiEnabled: Bool = false
     @State private var midiChannelText: String = "1"
@@ -65,6 +74,11 @@ struct SongEditorView: View {
     @State private var useBankSelect: Bool = false
     @State private var bankMSBText: String = "0"
     @State private var bankLSBText: String = "0"
+
+    // Multi-instrument MIDI
+    @State private var selectedInstrumentType: MIDIInstrumentType = .keyboard
+    @State private var editingLocalOverride: Bool = false
+    @State private var hasLocalOverride: Bool = false
 
     // Tap Tempo
     @State private var tapTimes: [Date] = []
@@ -75,6 +89,7 @@ struct SongEditorView: View {
                 songDetailsSection
                 midiSection
                 if midiEnabled {
+                    midiActionsSection
                     if !midiService.customPatches.isEmpty {
                         customPatchesSection
                     }
@@ -108,17 +123,12 @@ struct SongEditorView: View {
             TextField("Key (e.g., C, Am, G)", text: $key)
                 .autocapitalization(.allCharacters)
             HStack {
-                TextField("", text: $tempo)
-                    .keyboardType(.numberPad)
-                    .frame(width: 50)
-                    .multilineTextAlignment(.trailing)
+                NumericTextField(text: $tempo, placeholder: "")
+                    .frame(width: 50, height: 30)
                     .onChange(of: tempo) { newValue in
                         // Limit to 3 digits
-                        let filtered = newValue.filter { $0.isNumber }
-                        if filtered.count > 3 {
-                            tempo = String(filtered.prefix(3))
-                        } else if filtered != newValue {
-                            tempo = filtered
+                        if newValue.count > 3 {
+                            tempo = String(newValue.prefix(3))
                         }
                     }
                 Text("BPM")
@@ -145,30 +155,60 @@ struct SongEditorView: View {
     private var midiSection: some View {
         Section {
             Toggle("Send MIDI Program Change", isOn: $midiEnabled)
-            
+
             if midiEnabled {
+                // Instrument type selector
+                Picker("Instrument", selection: $selectedInstrumentType) {
+                    ForEach(MIDIInstrumentType.allCases) { type in
+                        Label(type.displayName, systemImage: type.iconName)
+                            .tag(type)
+                    }
+                }
+                .pickerStyle(.menu)
+                .onChange(of: selectedInstrumentType) { newType in
+                    // Remember the last selected instrument type
+                    UserDefaults.standard.set(newType.rawValue, forKey: "lastEditedMIDIInstrumentType")
+                    // Load profile but keep MIDI section open (don't change midiEnabled)
+                    loadProfileForInstrument(keepSectionOpen: true)
+                }
+
+                // Local override indicator and toggle
+                if hasLocalOverride {
+                    HStack {
+                        Image(systemName: "iphone")
+                            .foregroundColor(.orange)
+                        Text("Local Override Active")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Spacer()
+                    }
+                }
+
+                Toggle(editingLocalOverride ? "Save as Local (This Device)" : "Save to Songlist (Shared)", isOn: $editingLocalOverride)
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+
                 HStack {
                     Text("Channel")
                     Spacer()
                     NumericTextField(text: $midiChannelText, placeholder: "1-16")
                         .frame(width: 60, height: 30)
                 }
-                
+
                 HStack {
                     Text("Patch")
                     Spacer()
                     NumericTextField(text: $midiPatchText, placeholder: "0-127")
                         .frame(width: 60, height: 30)
                 }
-                
+
                 if let patch = Int(midiPatchText), patch >= 0, patch < 128 {
                     Text(gmProgramName(patch))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Toggle("Use Bank Select", isOn: $useBankSelect)
-                
+
                 if useBankSelect {
                     HStack {
                         Text("Bank MSB")
@@ -176,7 +216,7 @@ struct SongEditorView: View {
                         NumericTextField(text: $bankMSBText, placeholder: "0-127")
                             .frame(width: 60, height: 30)
                     }
-                    
+
                     HStack {
                         Text("Bank LSB")
                         Spacer()
@@ -188,7 +228,55 @@ struct SongEditorView: View {
         } header: {
             Text("MIDI Program Change")
         } footer: {
-            Text("When this song is displayed, the app sends a MIDI program change to switch patches.")
+            if midiEnabled {
+                if editingLocalOverride {
+                    Text("Local settings stay on this device and are not synced to cloud.")
+                } else {
+                    Text("Songlist settings are shared when you upload to cloud.")
+                }
+            } else {
+                Text("When this song is displayed, the app sends a MIDI program change to switch patches.")
+            }
+        }
+    }
+
+    private var midiActionsSection: some View {
+        Section {
+            if hasLocalOverride {
+                Button {
+                    pushLocalToSonglist()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.up.doc")
+                            .foregroundColor(.blue)
+                        Text("Push Local Settings to Songlist")
+                    }
+                }
+
+                Button {
+                    resetToSonglistDefaults()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.counterclockwise")
+                            .foregroundColor(.orange)
+                        Text("Reset to Songlist Defaults")
+                    }
+                }
+            } else if song.hasAnyMIDIProfile {
+                Button {
+                    importSonglistToLocal()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.down.doc")
+                            .foregroundColor(.green)
+                        Text("Copy Songlist Settings to Local")
+                    }
+                }
+            }
+        } header: {
+            if hasLocalOverride || song.hasAnyMIDIProfile {
+                Text("MIDI Actions")
+            }
         }
     }
     
@@ -334,13 +422,83 @@ struct SongEditorView: View {
         }
         key = song.key ?? ""
         notes = song.notes ?? ""
-        
-        midiEnabled = song.midiProgramNumber != nil
-        midiChannelText = "\((song.midiChannel ?? 0) + 1)"
-        midiPatchText = "\(song.midiProgramNumber ?? 0)"
-        useBankSelect = song.midiBankMSB != nil || song.midiBankLSB != nil
-        bankMSBText = "\(song.midiBankMSB ?? 0)"
-        bankLSBText = "\(song.midiBankLSB ?? 0)"
+
+        // Check for local override
+        hasLocalOverride = overridesService.hasLocalOverride(for: song)
+
+        // Remember last edited instrument type (per-editor session, stored in UserDefaults)
+        if let savedType = UserDefaults.standard.string(forKey: "lastEditedMIDIInstrumentType"),
+           let type = MIDIInstrumentType(rawValue: savedType) {
+            selectedInstrumentType = type
+        } else {
+            selectedInstrumentType = overridesService.activeInstrumentType
+        }
+
+        // If the selected instrument has no profile, but the song has profiles for other instruments,
+        // auto-select the first instrument that has a profile
+        if song.midiProfile(for: selectedInstrumentType) == nil {
+            if let firstProfile = song.midiProfiles.first(where: { $0.hasProgramChange }) {
+                selectedInstrumentType = firstProfile.instrumentType
+                UserDefaults.standard.set(selectedInstrumentType.rawValue, forKey: "lastEditedMIDIInstrumentType")
+            }
+        }
+
+        // Load MIDI settings - prefer local override if exists
+        loadProfileForInstrument()
+    }
+
+    private func loadProfileForInstrument(keepSectionOpen: Bool = false) {
+        // First check local override for selected instrument
+        if let override = overridesService.localOverride(for: song),
+           let profile = override.profile(for: selectedInstrumentType) {
+            editingLocalOverride = true
+            loadFromProfile(profile, keepSectionOpen: keepSectionOpen)
+            return
+        }
+
+        // Check song's profile for selected instrument
+        if let profile = song.midiProfile(for: selectedInstrumentType) {
+            editingLocalOverride = false
+            loadFromProfile(profile, keepSectionOpen: keepSectionOpen)
+            return
+        }
+
+        // Fall back to legacy fields for keyboard
+        if selectedInstrumentType == .keyboard && song.midiProgramNumber != nil {
+            editingLocalOverride = false
+            midiEnabled = true
+            midiChannelText = "\((song.midiChannel ?? 0) + 1)"
+            midiPatchText = "\(song.midiProgramNumber ?? 0)"
+            useBankSelect = song.midiBankMSB != nil || song.midiBankLSB != nil
+            bankMSBText = "\(song.midiBankMSB ?? 0)"
+            bankLSBText = "\(song.midiBankLSB ?? 0)"
+            return
+        }
+
+        // No profile for this instrument - clear fields but optionally keep section open
+        editingLocalOverride = false
+        if !keepSectionOpen {
+            midiEnabled = false
+        }
+        // Reset to defaults for this new instrument
+        midiChannelText = "1"
+        midiPatchText = "0"
+        useBankSelect = false
+        bankMSBText = "0"
+        bankLSBText = "0"
+    }
+
+    private func loadFromProfile(_ profile: MIDIProfile, keepSectionOpen: Bool = false) {
+        // When switching instruments, keep section open; otherwise reflect profile state
+        if !keepSectionOpen {
+            midiEnabled = profile.hasProgramChange
+        }
+        // Always load the profile's values
+        midiChannelText = "\((profile.channel ?? 0) + 1)"
+        midiPatchText = "\(profile.programNumber ?? 0)"
+        useBankSelect = profile.bankMSB != nil || profile.bankLSB != nil
+        bankMSBText = "\(profile.bankMSB ?? 0)"
+        bankLSBText = "\(profile.bankLSB ?? 0)"
     }
     
     private func saveChanges() {
@@ -350,40 +508,100 @@ struct SongEditorView: View {
         song.key = key.isEmpty ? nil : key
         song.notes = notes.isEmpty ? nil : notes
         song.lastModified = Date()
-        
-        if midiEnabled {
-            if let channel = Int(midiChannelText) {
-                song.midiChannel = max(0, min(15, channel - 1))
+
+        // Build the current profile
+        let profile = buildCurrentProfile()
+
+        if editingLocalOverride {
+            // Save to local overrides
+            if midiEnabled, let profile = profile {
+                overridesService.setLocalProfile(profile, for: song)
+                hasLocalOverride = true
             } else {
-                song.midiChannel = 0
-            }
-            
-            if let patch = Int(midiPatchText) {
-                song.midiProgramNumber = max(0, min(127, patch))
-            } else {
-                song.midiProgramNumber = 0
-            }
-            
-            if useBankSelect {
-                if let msb = Int(bankMSBText) {
-                    song.midiBankMSB = max(0, min(127, msb))
+                // If MIDI is disabled, remove the local override for this instrument
+                if var override = overridesService.localOverride(for: song) {
+                    override.removeProfile(for: selectedInstrumentType)
+                    if override.profiles.isEmpty {
+                        overridesService.resetToSonglistDefaults(for: song)
+                        hasLocalOverride = false
+                    } else {
+                        overridesService.setOverride(override)
+                    }
                 }
-                if let lsb = Int(bankLSBText) {
-                    song.midiBankLSB = max(0, min(127, lsb))
-                }
-            } else {
-                song.midiBankMSB = nil
-                song.midiBankLSB = nil
             }
         } else {
-            song.midiChannel = nil
-            song.midiProgramNumber = nil
-            song.midiBankMSB = nil
-            song.midiBankLSB = nil
+            // Save to song's shared profiles
+            if midiEnabled, let profile = profile {
+                song.setMIDIProfile(profile)
+            } else {
+                song.removeMIDIProfile(for: selectedInstrumentType)
+            }
         }
 
         documentService.saveSong(song)
         dismiss()
+    }
+
+    private func buildCurrentProfile() -> MIDIProfile? {
+        guard midiEnabled else { return nil }
+
+        let channel: Int?
+        if let ch = Int(midiChannelText) {
+            channel = max(0, min(15, ch - 1))
+        } else {
+            channel = 0
+        }
+
+        let program: Int?
+        if let p = Int(midiPatchText) {
+            program = max(0, min(127, p))
+        } else {
+            program = nil
+        }
+
+        guard program != nil else { return nil }
+
+        var bankMSB: Int? = nil
+        var bankLSB: Int? = nil
+
+        if useBankSelect {
+            if let msb = Int(bankMSBText) {
+                bankMSB = max(0, min(127, msb))
+            }
+            if let lsb = Int(bankLSBText) {
+                bankLSB = max(0, min(127, lsb))
+            }
+        }
+
+        return MIDIProfile(
+            instrumentType: selectedInstrumentType,
+            channel: channel,
+            programNumber: program,
+            bankMSB: bankMSB,
+            bankLSB: bankLSB
+        )
+    }
+
+    // MARK: - MIDI Actions
+
+    private func pushLocalToSonglist() {
+        overridesService.pushOverrideToSong(song, documentService: documentService)
+        overridesService.resetToSonglistDefaults(for: song)
+        hasLocalOverride = false
+        editingLocalOverride = false
+    }
+
+    private func resetToSonglistDefaults() {
+        overridesService.resetToSonglistDefaults(for: song)
+        hasLocalOverride = false
+        editingLocalOverride = false
+        loadProfileForInstrument()
+    }
+
+    private func importSonglistToLocal() {
+        overridesService.importFromSong(song)
+        hasLocalOverride = true
+        editingLocalOverride = true
     }
     
     private func gmProgramName(_ program: Int) -> String {

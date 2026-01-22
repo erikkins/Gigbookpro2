@@ -11,6 +11,9 @@
 		AA0002 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002 /* AppConfig.swift */; };
 		AA0003 /* Song.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0003 /* Song.swift */; };
 		AA0004 /* Songlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0004 /* Songlist.swift */; };
+		AA0024 /* MIDIProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0024 /* MIDIProfile.swift */; };
+		AA0025 /* LocalMIDIOverride.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0025 /* LocalMIDIOverride.swift */; };
+		AA0026 /* LocalMIDIOverridesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0026 /* LocalMIDIOverridesService.swift */; };
 		AA0005 /* MIDIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0005 /* MIDIService.swift */; };
 		AA0006 /* DocumentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0006 /* DocumentService.swift */; };
 		AA0007 /* SonglistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0007 /* SonglistService.swift */; };
@@ -55,6 +58,9 @@
 		BB0020 /* SonglistEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonglistEditorView.swift; sourceTree = "<group>"; };
 		BB0021 /* GzipHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GzipHelper.swift; sourceTree = "<group>"; };
 		BB0023 /* PunchHoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PunchHoleView.swift; sourceTree = "<group>"; };
+		BB0024 /* MIDIProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIProfile.swift; sourceTree = "<group>"; };
+		BB0025 /* LocalMIDIOverride.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMIDIOverride.swift; sourceTree = "<group>"; };
+		BB0026 /* LocalMIDIOverridesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMIDIOverridesService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +80,8 @@
 			children = (
 				BB0003 /* Song.swift */,
 				BB0004 /* Songlist.swift */,
+				BB0024 /* MIDIProfile.swift */,
+				BB0025 /* LocalMIDIOverride.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -103,6 +111,7 @@
 				BB0008 /* AzureStorageService.swift */,
 				BB0009 /* PeerConnectivityService.swift */,
 				BB0021 /* GzipHelper.swift */,
+				BB0026 /* LocalMIDIOverridesService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -241,6 +250,9 @@
 				AA0020 /* SonglistEditorView.swift in Sources */,
 				AA0021 /* GzipHelper.swift in Sources */,
 				AA0023 /* PunchHoleView.swift in Sources */,
+				AA0024 /* MIDIProfile.swift in Sources */,
+				AA0025 /* LocalMIDIOverride.swift in Sources */,
+				AA0026 /* LocalMIDIOverridesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

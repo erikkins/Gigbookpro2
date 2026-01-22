@@ -39,6 +39,9 @@ class MIDIService: ObservableObject {
         }
     }
 
+    /// Reference to the local overrides service (set by app on startup)
+    weak var overridesService: LocalMIDIOverridesService?
+
     private var midiClient: MIDIClientRef = 0
     private var outputPort: MIDIPortRef = 0
 
@@ -188,10 +191,25 @@ class MIDIService: ObservableObject {
 
     /// Send program change for a song to change the patch on connected instrument
     func sendProgramChange(for song: Song) {
-        guard let destination = connectedDestination,
-              let program = song.midiProgramNumber else { return }
+        guard let destination = connectedDestination else { return }
 
-        let channel = UInt8(song.midiChannel ?? 0)
+        // Get effective profile: check overrides service first, then fall back to song's profiles
+        let profile: MIDIProfile?
+        if let overridesService = overridesService {
+            profile = overridesService.effectiveProfile(for: song)
+        } else {
+            // Fallback: use song's primary profile or legacy fields
+            profile = song.primaryMIDIProfile ?? MIDIProfile.fromLegacy(
+                channel: song.midiChannel,
+                program: song.midiProgramNumber,
+                bankMSB: song.midiBankMSB,
+                bankLSB: song.midiBankLSB
+            )
+        }
+
+        guard let profile = profile, let program = profile.programNumber else { return }
+
+        let channel = UInt8(profile.channel ?? 0)
 
         if nordStageMode {
             // Nord Stage 2EX mode: always send Bank MSB=0, LSB=3
@@ -199,11 +217,11 @@ class MIDIService: ObservableObject {
             sendControlChange(channel: channel, controller: 32, value: 3, to: destination)
             print("🎹 Nord Stage mode: Sent Bank MSB=0, LSB=3")
         } else {
-            // Standard mode: use song's bank settings if specified
-            if let bankMSB = song.midiBankMSB {
+            // Standard mode: use profile's bank settings if specified
+            if let bankMSB = profile.bankMSB {
                 sendControlChange(channel: channel, controller: 0, value: UInt8(bankMSB), to: destination)
             }
-            if let bankLSB = song.midiBankLSB {
+            if let bankLSB = profile.bankLSB {
                 sendControlChange(channel: channel, controller: 32, value: UInt8(bankLSB), to: destination)
             }
         }
@@ -211,7 +229,8 @@ class MIDIService: ObservableObject {
         // Send Program Change
         sendProgramChangeMessage(channel: channel, program: UInt8(program), to: destination)
 
-        print("🎹 Sent MIDI Program Change: Ch\(channel + 1) Prog:\(program)\(nordStageMode ? " (Nord Stage)" : "")")
+        let instrumentInfo = profile.instrumentType != .keyboard ? " [\(profile.instrumentType.displayName)]" : ""
+        print("🎹 Sent MIDI Program Change: Ch\(channel + 1) Prog:\(program)\(instrumentInfo)\(nordStageMode ? " (Nord Stage)" : "")")
     }
     
     private func sendProgramChangeMessage(channel: UInt8, program: UInt8, to destination: MIDIDestination) {

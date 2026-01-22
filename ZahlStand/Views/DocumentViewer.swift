@@ -3,6 +3,7 @@ import PDFKit
 
 struct DocumentViewer: View {
     @StateObject private var viewModel: DocumentViewerViewModel
+    @EnvironmentObject var overridesService: LocalMIDIOverridesService
     @State private var showingMIDISettings = false
     @State private var showingQuickJump = false
 
@@ -113,7 +114,7 @@ struct DocumentViewer: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingMIDISettings) {
-            MIDISettingsView(midiService: midiService)
+            MIDISettingsView(midiService: midiService, overridesService: overridesService)
         }
         .sheet(isPresented: $showingQuickJump) {
             QuickJumpView(viewModel: viewModel, isPresented: $showingQuickJump)

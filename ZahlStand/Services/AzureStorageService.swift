@@ -227,18 +227,41 @@ class AzureStorageService: ObservableObject {
             if let v = song.tempo { s["tempo"] = v }
             if let v = song.notes { s["notes"] = v }
             if let v = song.pageCount { s["pageCount"] = v }
+
+            // Export MIDI profiles (new format)
+            if song.hasAnyMIDIProfile {
+                let profilesData = song.midiProfiles.compactMap { profile -> [String: Any]? in
+                    guard profile.hasProgramChange else { return nil }
+                    var p: [String: Any] = [
+                        "id": profile.id,
+                        "instrumentType": profile.instrumentType.rawValue
+                    ]
+                    if let v = profile.channel { p["channel"] = v }
+                    if let v = profile.programNumber { p["programNumber"] = v }
+                    if let v = profile.bankMSB { p["bankMSB"] = v }
+                    if let v = profile.bankLSB { p["bankLSB"] = v }
+                    if let v = profile.label { p["label"] = v }
+                    return p
+                }
+                if !profilesData.isEmpty {
+                    s["midiProfiles"] = profilesData
+                }
+            }
+
+            // Also export legacy fields for backward compatibility
             if song.hasMIDIProgramChange {
-                if let v = song.midiChannel { s["midiChannel"] = v }
-                if let v = song.midiProgramNumber { s["midiProgramNumber"] = v }
-                if let v = song.midiBankMSB { s["midiBankMSB"] = v }
-                if let v = song.midiBankLSB { s["midiBankLSB"] = v }
+                let legacyProfile = song.midiProfile(for: .keyboard) ?? song.primaryMIDIProfile
+                if let v = legacyProfile?.channel ?? song.midiChannel { s["midiChannel"] = v }
+                if let v = legacyProfile?.programNumber ?? song.midiProgramNumber { s["midiProgramNumber"] = v }
+                if let v = legacyProfile?.bankMSB ?? song.midiBankMSB { s["midiBankMSB"] = v }
+                if let v = legacyProfile?.bankLSB ?? song.midiBankLSB { s["midiBankLSB"] = v }
             }
             if let path = song.filePath, let data = try? Data(contentsOf: path) {
                 s["fileData"] = data.base64EncodedString()
             }
             songs.append(s)
         }
-        let dict: [String: Any] = ["version": 2, "name": songlist.name, "id": songlist.id,
+        let dict: [String: Any] = ["version": 3, "name": songlist.name, "id": songlist.id,
                                    "event": songlist.event as Any, "venue": songlist.venue as Any,
                                    "dateCreated": ISO8601DateFormatter().string(from: songlist.dateCreated),
                                    "dateModified": ISO8601DateFormatter().string(from: songlist.dateModified),
@@ -430,7 +453,40 @@ class AzureStorageService: ObservableObject {
 
     /// Apply MIDI settings from cloud data to a song (retains cloud settings when present)
     private func applyMIDISettings(from cloudData: [String: Any], to song: Song) {
-        // Only update if cloud has MIDI settings
+        // Try to parse new format profiles first
+        if let profilesData = cloudData["midiProfiles"] as? [[String: Any]], !profilesData.isEmpty {
+            var profiles: [MIDIProfile] = []
+            for profileDict in profilesData {
+                guard let typeRaw = profileDict["instrumentType"] as? String,
+                      let type = MIDIInstrumentType(rawValue: typeRaw) else { continue }
+
+                let profile = MIDIProfile(
+                    id: profileDict["id"] as? String ?? UUID().uuidString,
+                    instrumentType: type,
+                    channel: profileDict["channel"] as? Int,
+                    programNumber: profileDict["programNumber"] as? Int,
+                    bankMSB: profileDict["bankMSB"] as? Int,
+                    bankLSB: profileDict["bankLSB"] as? Int,
+                    label: profileDict["label"] as? String
+                )
+                if profile.hasProgramChange {
+                    profiles.append(profile)
+                }
+            }
+            if !profiles.isEmpty {
+                song.midiProfiles = profiles
+                // Also update legacy fields from keyboard profile
+                if let keyboardProfile = profiles.first(where: { $0.instrumentType == .keyboard }) {
+                    song.midiChannel = keyboardProfile.channel
+                    song.midiProgramNumber = keyboardProfile.programNumber
+                    song.midiBankMSB = keyboardProfile.bankMSB
+                    song.midiBankLSB = keyboardProfile.bankLSB
+                }
+                return
+            }
+        }
+
+        // Fall back to legacy fields
         if let channel = cloudData["midiChannel"] as? Int {
             song.midiChannel = channel
         }
@@ -442,6 +498,18 @@ class AzureStorageService: ObservableObject {
         }
         if let bankLSB = cloudData["midiBankLSB"] as? Int {
             song.midiBankLSB = bankLSB
+        }
+
+        // Migrate legacy to profile if no profiles exist
+        if song.midiProfiles.isEmpty, let program = song.midiProgramNumber {
+            let profile = MIDIProfile(
+                instrumentType: .keyboard,
+                channel: song.midiChannel,
+                programNumber: program,
+                bankMSB: song.midiBankMSB,
+                bankLSB: song.midiBankLSB
+            )
+            song.midiProfiles = [profile]
         }
     }
 }

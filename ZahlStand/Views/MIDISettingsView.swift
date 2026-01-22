@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MIDISettingsView: View {
     @ObservedObject var midiService: MIDIService
+    @ObservedObject var overridesService: LocalMIDIOverridesService
     @Environment(\.dismiss) var dismiss
     @State private var showingAddPatch = false
     @State private var editingPatch: MIDIPatch?
@@ -35,6 +36,21 @@ struct MIDISettingsView: View {
                     Text("Instrument Settings")
                 } footer: {
                     Text("Enable for Nord Stage 2/3 keyboards. Automatically sends Bank MSB=0, LSB=3 before each program change.")
+                }
+
+                Section {
+                    Picker("Active Instrument", selection: $overridesService.activeInstrumentType) {
+                        ForEach(MIDIInstrumentType.allCases) { type in
+                            Label(type.displayName, systemImage: type.iconName)
+                                .tag(type)
+                        }
+                    }
+
+                    Toggle("Use Local Overrides", isOn: $overridesService.useLocalOverrides)
+                } header: {
+                    Text("Multi-Instrument Settings")
+                } footer: {
+                    Text("Select which instrument's MIDI profile to use. Local overrides are device-specific settings that don't sync to cloud.")
                 }
 
                 Section {
