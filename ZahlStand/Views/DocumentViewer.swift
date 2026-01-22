@@ -241,6 +241,7 @@ struct TempoIndicatorView: View {
                         isPaused ? .none : .easeInOut(duration: pulseDuration / 2).repeatForever(autoreverses: true),
                         value: isAnimating
                     )
+                    .id("tempo-ball-\(bpm)")
 
                 Text("\(bpm)")
                     .font(.caption.monospacedDigit())
@@ -253,6 +254,18 @@ struct TempoIndicatorView: View {
         }
         .buttonStyle(.plain)
         .onAppear {
+            startAnimation()
+        }
+        .onChange(of: bpm) { _ in
+            // Reset animation when BPM changes (different song)
+            isAnimating = false
+            isPaused = false
+            startAnimation()
+        }
+    }
+
+    private func startAnimation() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             isAnimating = true
         }
     }

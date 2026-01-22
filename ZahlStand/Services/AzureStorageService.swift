@@ -386,8 +386,17 @@ class AzureStorageService: ObservableObject {
         var ids: [String] = []
         for s in legacy.songs {
             var song: Song?
-            
-            if let existing = documentService.songs.first(where: { $0.fullFileName == s.path }) {
+
+            // Try exact match first, then fallback to PDF for migrated Word files
+            let ext = (s.path as NSString).pathExtension.lowercased()
+            let baseName = (s.path as NSString).deletingPathExtension
+
+            let existing: Song? = documentService.songs.first(where: { $0.fullFileName == s.path })
+                ?? (["doc", "docx"].contains(ext)
+                    ? documentService.songs.first(where: { $0.fileName == baseName && $0.isPDF })
+                    : nil)
+
+            if let existing = existing {
                 song = existing
                 ids.append(existing.id)
             } else if let data = s.fileData, !data.isEmpty {
@@ -424,8 +433,17 @@ class AzureStorageService: ObservableObject {
         var ids: [String] = []
         if let songs = json["songs"] as? [[String: Any]] {
             for s in songs {
-                let fn = "\(s["fileName"] as? String ?? "").\(s["fileExtension"] as? String ?? "")"
-                if let existing = documentService.songs.first(where: { $0.fullFileName == fn }) {
+                let baseName = s["fileName"] as? String ?? ""
+                let ext = s["fileExtension"] as? String ?? ""
+                let fn = "\(baseName).\(ext)"
+
+                // Try exact match first, then fallback to PDF for migrated Word files
+                let existing: Song? = documentService.songs.first(where: { $0.fullFileName == fn })
+                    ?? (["doc", "docx"].contains(ext.lowercased())
+                        ? documentService.songs.first(where: { $0.fileName == baseName && $0.isPDF })
+                        : nil)
+
+                if let existing = existing {
                     // Song exists - apply MIDI settings from cloud if present
                     applyMIDISettings(from: s, to: existing)
                     documentService.saveSong(existing)
