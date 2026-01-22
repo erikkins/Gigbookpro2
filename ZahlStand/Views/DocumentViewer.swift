@@ -79,7 +79,7 @@ struct DocumentViewer: View {
 
                         PunchHoleView()
                     }
-                    
+
                     if !viewModel.isSingleSongMode || viewModel.isLibraryMode {
                         navigationOverlay(geometry: geometry)
                     }
@@ -87,7 +87,6 @@ struct DocumentViewer: View {
                     WelcomeView()
                 }
             }
-            .gesture(navigationGestures(geometry: geometry))
         }
         .ignoresSafeArea(.container, edges: .top)
         .toolbar {
@@ -208,17 +207,6 @@ struct DocumentViewer: View {
         }
     }
     
-    private func navigationGestures(geometry: GeometryProxy) -> some Gesture {
-        DragGesture(minimumDistance: 50)
-            .onEnded { value in
-                let horizontal = value.translation.width
-                if horizontal > 100 && viewModel.hasPreviousSong {
-                    viewModel.previousSong()
-                } else if horizontal < -100 && viewModel.hasNextSong {
-                    viewModel.nextSong()
-                }
-            }
-    }
 }
 
 // MARK: - Tempo Indicator
@@ -247,8 +235,8 @@ struct TempoIndicatorView: View {
                 Circle()
                     .fill(Color.red)
                     .frame(width: 10, height: 10)
+                    .scaleEffect(isPaused ? 1.0 : (isAnimating ? 1.15 : 1.0), anchor: .center)
                     .opacity(isPaused ? 0.4 : (isAnimating ? 1.0 : 0.3))
-                    .scaleEffect(isPaused ? 1.0 : (isAnimating ? 1.15 : 1.0))
                     .animation(
                         isPaused ? .none : .easeInOut(duration: pulseDuration / 2).repeatForever(autoreverses: true),
                         value: isAnimating
@@ -528,26 +516,26 @@ struct PDFContainerView: UIViewControllerRepresentable {
     }
 }
 
-class PDFKeyCommandController: KeyCommandController {
+class PDFKeyCommandController: KeyCommandController, UIGestureRecognizerDelegate {
     let pdfView = NonInteractivePDFView()
-    private let topMarginOffset: CGFloat = 72
-    
+    private let topMarginOffset: CGFloat = 36
+
     var document: PDFDocument? {
-        didSet { 
+        didSet {
             pdfView.document = document
             scrollUpToHideMargin()
         }
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         pdfView.translatesAutoresizingMaskIntoConstraints = false
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
         pdfView.document = document
-        
+
         view.addSubview(pdfView)
         NSLayoutConstraint.activate([
             pdfView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -555,9 +543,33 @@ class PDFKeyCommandController: KeyCommandController {
             pdfView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-        
+
         onScrollUp = { [weak self] in self?.scrollUp() }
         onScrollDown = { [weak self] in self?.scrollDown() }
+
+        // Add swipe gestures for song navigation
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeLeft))
+        swipeLeft.direction = .left
+        swipeLeft.delegate = self
+        view.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeRight))
+        swipeRight.direction = .right
+        swipeRight.delegate = self
+        view.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func handleSwipeLeft() {
+        onNext?()
+    }
+
+    @objc private func handleSwipeRight() {
+        onPrevious?()
+    }
+
+    // Allow swipe gestures to work simultaneously with scroll view
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
     
     override func viewDidAppear(_ animated: Bool) {
