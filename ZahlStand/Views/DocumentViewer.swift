@@ -137,23 +137,21 @@ struct DocumentViewer: View {
                     }
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
-                    if (!viewModel.isSingleSongMode || viewModel.isLibraryMode) && viewModel.currentSong != nil {
-                        Button { showingQuickJump = true } label: {
-                            Image(systemName: "list.number")
-                        }
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if (!viewModel.isSingleSongMode || viewModel.isLibraryMode) && viewModel.currentSong != nil {
+                    Button { showingQuickJump = true } label: {
+                        Image(systemName: "list.number")
                     }
-                    if viewModel.currentSong != nil {
-                        Button { showingAnnotationProfiles = true } label: {
-                            Image(systemName: annotationService.hasAnnotations ? "note.text" : "note.text.badge.plus")
-                                .foregroundColor(annotationService.hasAnnotations ? .orange : .primary)
-                        }
+                }
+                if viewModel.currentSong != nil {
+                    Button { showingAnnotationProfiles = true } label: {
+                        Image(systemName: annotationService.hasAnnotations ? "note.text" : "note.text.badge.plus")
+                            .foregroundColor(annotationService.hasAnnotations ? .orange : .primary)
                     }
-                    Button { showingMIDISettings = true } label: {
-                        Image(systemName: viewModel.midiConnected ? "pianokeys.inverse" : "pianokeys")
-                            .foregroundColor(viewModel.midiConnected ? .green : .primary)
-                    }
+                }
+                Button { showingMIDISettings = true } label: {
+                    Image(systemName: viewModel.midiConnected ? "pianokeys.inverse" : "pianokeys")
+                        .foregroundColor(viewModel.midiConnected ? .green : .primary)
                 }
             }
         }

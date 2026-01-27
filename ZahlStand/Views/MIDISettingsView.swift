@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreAudioKit
 
 struct MIDISettingsView: View {
     @ObservedObject var midiService: MIDIService
@@ -6,6 +7,7 @@ struct MIDISettingsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showingAddPatch = false
     @State private var editingPatch: MIDIPatch?
+    @State private var showingBluetoothMIDI = false
 
     var body: some View {
         NavigationView {
@@ -107,6 +109,26 @@ struct MIDISettingsView: View {
                     Text("Define your instrument's patches here. These appear as quick presets when editing songs.")
                 }
 
+                Section {
+                    Button {
+                        showingBluetoothMIDI = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .foregroundColor(.blue)
+                            Text("Connect Bluetooth MIDI Device")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                } header: {
+                    Text("Bluetooth MIDI")
+                } footer: {
+                    Text("Pair with wireless MIDI controllers, foot pedals, and instruments.")
+                }
+
                 Section("MIDI Destinations (Instruments)") {
                     if midiService.availableDestinations.isEmpty {
                         Text("No MIDI devices found")
@@ -201,6 +223,12 @@ struct MIDISettingsView: View {
             .sheet(item: $editingPatch) { patch in
                 PatchEditorView(midiService: midiService, patch: patch)
             }
+            .sheet(isPresented: $showingBluetoothMIDI, onDismiss: {
+                // Refresh device list after Bluetooth configuration
+                midiService.scanDevices()
+            }) {
+                BluetoothMIDIView()
+            }
         }
     }
 }
@@ -288,5 +316,40 @@ struct PatchEditorView: View {
             midiService.addPatch(newPatch)
         }
         dismiss()
+    }
+}
+
+// MARK: - Bluetooth MIDI Configuration
+
+struct BluetoothMIDIView: UIViewControllerRepresentable {
+    @Environment(\.dismiss) var dismiss
+
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let btMidiVC = CABTMIDICentralViewController()
+        let navController = UINavigationController(rootViewController: btMidiVC)
+        btMidiVC.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: context.coordinator,
+            action: #selector(Coordinator.dismissView)
+        )
+        return navController
+    }
+
+    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject {
+        let parent: BluetoothMIDIView
+
+        init(_ parent: BluetoothMIDIView) {
+            self.parent = parent
+        }
+
+        @objc func dismissView() {
+            parent.dismiss()
+        }
     }
 }
