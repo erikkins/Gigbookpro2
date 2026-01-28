@@ -14,6 +14,7 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
     @Published var pageCount: Int?
     var duration: TimeInterval?
     var tempo: String?
+    var timeSignature: String?  // nil = None, "4/4", "3/4"
     var key: String?
     var notes: String?
     
@@ -43,7 +44,7 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
     
     enum CodingKeys: String, CodingKey {
         case id, title, artist, fileName, fileExtension, filePath
-        case dateAdded, lastModified, tags, pageCount, duration, tempo, key, notes
+        case dateAdded, lastModified, tags, pageCount, duration, tempo, timeSignature, key, notes
         case midiChannel, midiProgramNumber, midiBankMSB, midiBankLSB
         case midiProfiles
     }
@@ -64,6 +65,7 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
         pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount)
         duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration)
         tempo = try container.decodeIfPresent(String.self, forKey: .tempo)
+        timeSignature = try container.decodeIfPresent(String.self, forKey: .timeSignature)
         key = try container.decodeIfPresent(String.self, forKey: .key)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         midiChannel = try container.decodeIfPresent(Int.self, forKey: .midiChannel)
@@ -101,6 +103,7 @@ class Song: Codable, Identifiable, Equatable, ObservableObject {
         try container.encodeIfPresent(pageCount, forKey: .pageCount)
         try container.encodeIfPresent(duration, forKey: .duration)
         try container.encodeIfPresent(tempo, forKey: .tempo)
+        try container.encodeIfPresent(timeSignature, forKey: .timeSignature)
         try container.encodeIfPresent(key, forKey: .key)
         try container.encodeIfPresent(notes, forKey: .notes)
         // Write legacy fields for backward compatibility (use keyboard profile if available)
@@ -210,5 +213,15 @@ extension Song {
         let digits = tempo.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
         guard let value = Int(digits), value > 0, value <= 300 else { return nil }
         return value
+    }
+
+    /// Number of beats per measure based on time signature (nil if no time signature)
+    var beatsPerMeasure: Int? {
+        switch timeSignature {
+        case "4/4": return 4
+        case "3/4": return 3
+        case "2/4": return 2
+        default: return nil
+        }
     }
 }

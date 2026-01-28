@@ -64,6 +64,7 @@ struct SongEditorView: View {
     @State private var title: String = ""
     @State private var artist: String = ""
     @State private var tempo: String = ""
+    @State private var timeSignature: String = ""  // "", "4/4", "3/4"
     @State private var key: String = ""
     @State private var notes: String = ""
 
@@ -146,6 +147,12 @@ struct SongEditorView: View {
                         .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
+            }
+            Picker("Time Signature", selection: $timeSignature) {
+                Text("None").tag("")
+                Text("4/4").tag("4/4")
+                Text("3/4").tag("3/4")
+                Text("2/4").tag("2/4")
             }
         } header: {
             Text("Song Details")
@@ -422,6 +429,7 @@ struct SongEditorView: View {
         }
         key = song.key ?? ""
         notes = song.notes ?? ""
+        timeSignature = song.timeSignature ?? ""
 
         // Check for local override
         hasLocalOverride = overridesService.hasLocalOverride(for: song)
@@ -505,6 +513,7 @@ struct SongEditorView: View {
         song.title = title
         song.artist = artist.isEmpty ? nil : artist
         song.tempo = tempo.isEmpty ? nil : tempo
+        song.timeSignature = timeSignature.isEmpty ? nil : timeSignature
         song.key = key.isEmpty ? nil : key
         song.notes = notes.isEmpty ? nil : notes
         song.lastModified = Date()

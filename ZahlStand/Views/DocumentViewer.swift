@@ -132,9 +132,7 @@ struct DocumentViewer: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if let song = viewModel.currentSong, let bpm = song.bpmValue {
-                    HStack {
-                        TempoIndicatorView(bpm: bpm)
-                    }
+                    TempoIndicatorView(bpm: bpm, songId: song.id, beatsPerMeasure: song.beatsPerMeasure)
                 }
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -281,35 +279,22 @@ struct DocumentViewer: View {
 
 struct TempoIndicatorView: View {
     let bpm: Int
-    @State private var isAnimating = false
+    let songId: String
+    let beatsPerMeasure: Int?  // nil = continuous pulse, 3 or 4 = beat indicator
     @State private var isPaused = false
-
-    private var pulseDuration: Double {
-        60.0 / Double(bpm)
-    }
 
     var body: some View {
         Button {
             isPaused.toggle()
-            if !isPaused {
-                // Restart animation when unpausing
-                isAnimating = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    isAnimating = true
-                }
-            }
         } label: {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 10, height: 10)
-                    .scaleEffect(isPaused ? 1.0 : (isAnimating ? 1.15 : 1.0), anchor: .center)
-                    .opacity(isPaused ? 0.4 : (isAnimating ? 1.0 : 0.3))
-                    .animation(
-                        isPaused ? .none : .easeInOut(duration: pulseDuration / 2).repeatForever(autoreverses: true),
-                        value: isAnimating
-                    )
-                    .id("tempo-ball-\(bpm)")
+                if let beats = beatsPerMeasure {
+                    BeatIndicator(bpm: bpm, beats: beats, isPaused: isPaused)
+                        .id(songId)
+                } else {
+                    PulsingCircle(bpm: bpm, isPaused: isPaused)
+                        .id(songId)
+                }
 
                 Text("\(bpm)")
                     .font(.caption.monospacedDigit())
@@ -321,21 +306,90 @@ struct TempoIndicatorView: View {
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
-        .onAppear {
-            startAnimation()
-        }
-        .onChange(of: bpm) { _ in
-            // Reset animation when BPM changes (different song)
-            isAnimating = false
+        .onChange(of: songId) { _ in
             isPaused = false
-            startAnimation()
+        }
+    }
+}
+
+/// Continuous pulsing circle for songs without time signature
+private struct PulsingCircle: View {
+    let bpm: Int
+    let isPaused: Bool
+    @State private var isAnimating = false
+
+    private var pulseDuration: Double {
+        60.0 / Double(bpm)
+    }
+
+    var body: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 10, height: 10)
+            .scaleEffect(isPaused ? 1.0 : (isAnimating ? 1.15 : 1.0), anchor: .center)
+            .opacity(isPaused ? 0.4 : (isAnimating ? 1.0 : 0.3))
+            .animation(
+                isPaused ? .none : .easeInOut(duration: pulseDuration / 2).repeatForever(autoreverses: true),
+                value: isAnimating
+            )
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
+/// Beat indicator showing individual beats with accented downbeat
+private struct BeatIndicator: View {
+    let bpm: Int
+    let beats: Int
+    let isPaused: Bool
+    @State private var currentBeat: Int = 0
+    @State private var timer: Timer?
+
+    private var beatInterval: Double {
+        60.0 / Double(bpm)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<beats, id: \.self) { beat in
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: beat == 0 ? 12 : 10, height: beat == 0 ? 12 : 10)  // Downbeat is larger
+                    .scaleEffect(currentBeat == beat && !isPaused ? 1.3 : 1.0)
+                    .opacity(isPaused ? 0.4 : (currentBeat == beat ? 1.0 : 0.3))
+                    .animation(.easeOut(duration: 0.1), value: currentBeat)
+            }
+        }
+        .onAppear {
+            startTimer()
+        }
+        .onDisappear {
+            stopTimer()
+        }
+        .onChange(of: isPaused) { paused in
+            if paused {
+                stopTimer()
+            } else {
+                currentBeat = 0
+                startTimer()
+            }
         }
     }
 
-    private func startAnimation() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            isAnimating = true
+    private func startTimer() {
+        stopTimer()
+        currentBeat = 0
+        timer = Timer.scheduledTimer(withTimeInterval: beatInterval, repeats: true) { _ in
+            currentBeat = (currentBeat + 1) % beats
         }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
 }
 
