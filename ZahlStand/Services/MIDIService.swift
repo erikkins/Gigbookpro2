@@ -42,11 +42,27 @@ class MIDIService: ObservableObject {
     /// Reference to the local overrides service (set by app on startup)
     weak var overridesService: LocalMIDIOverridesService?
 
+    /// Enable MIDI Clock sync for tempo-based effects
+    @Published var sendMIDIClock: Bool {
+        didSet {
+            UserDefaults.standard.set(sendMIDIClock, forKey: "sendMIDIClock")
+            if !sendMIDIClock {
+                stopClock()
+            }
+        }
+    }
+
+    /// Current tempo being sent via MIDI Clock (nil if clock not running)
+    @Published private(set) var currentClockTempo: Int?
+
     private var midiClient: MIDIClientRef = 0
     private var outputPort: MIDIPortRef = 0
+    private var clockTimer: DispatchSourceTimer?
+    private var isClockRunning = false
 
     init() {
         self.nordStageMode = UserDefaults.standard.bool(forKey: "nordStageMode")
+        self.sendMIDIClock = UserDefaults.standard.bool(forKey: "sendMIDIClock")
         self.customPatches = Self.loadCustomPatches()
         setupMIDI()
         scanDevices()
@@ -130,6 +146,8 @@ class MIDIService: ObservableObject {
     }
     
     deinit {
+        clockTimer?.cancel()
+        clockTimer = nil
         if outputPort != 0 { MIDIPortDispose(outputPort) }
         if midiClient != 0 { MIDIClientDispose(midiClient) }
     }
@@ -183,6 +201,7 @@ class MIDIService: ObservableObject {
     }
     
     func disconnect() {
+        stopClock()
         connectedDestination = nil
         isConnected = false
     }
@@ -231,6 +250,14 @@ class MIDIService: ObservableObject {
 
         let instrumentInfo = profile.instrumentType != .keyboard ? " [\(profile.instrumentType.displayName)]" : ""
         print("🎹 Sent MIDI Program Change: Ch\(channel + 1) Prog:\(program)\(instrumentInfo)\(nordStageMode ? " (Nord Stage)" : "")")
+
+        // Start MIDI Clock if enabled and song has tempo
+        // Delay slightly to let device process program change first
+        if sendMIDIClock, let bpm = song.bpmValue {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.startClock(bpm: bpm)
+            }
+        }
     }
     
     private func sendProgramChangeMessage(channel: UInt8, program: UInt8, to destination: MIDIDestination) {
@@ -250,14 +277,80 @@ class MIDIService: ObservableObject {
     private func sendControlChange(channel: UInt8, controller: UInt8, value: UInt8, to destination: MIDIDestination) {
         var packetList = MIDIPacketList()
         var packet = MIDIPacketListInit(&packetList)
-        
+
         // Control Change: 0xB0 | channel, controller, value
         let controlChange: [UInt8] = [0xB0 | (channel & 0x0F), controller & 0x7F, value & 0x7F]
-        
+
         controlChange.withUnsafeBufferPointer { buffer in
             packet = MIDIPacketListAdd(&packetList, 1024, packet, 0, buffer.count, buffer.baseAddress!)
         }
-        
+
+        MIDISend(outputPort, destination.endpoint, &packetList)
+    }
+
+    // MARK: - MIDI Clock
+
+    /// Start sending MIDI Clock at the specified BPM
+    func startClock(bpm: Int) {
+        guard let destination = connectedDestination else { return }
+
+        // If clock is already running at this tempo, do nothing
+        if isClockRunning && currentClockTempo == bpm { return }
+
+        // Stop existing clock if running
+        stopClock()
+
+        // Calculate interval: MIDI Clock sends 24 pulses per quarter note
+        let interval = 60.0 / Double(bpm) / 24.0
+
+        // Send MIDI Start message
+        sendMIDIRealTimeMessage(0xFA, to: destination)
+
+        // Create high-precision timer for clock pulses
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInteractive))
+        timer.schedule(deadline: .now(), repeating: interval)
+        timer.setEventHandler { [weak self] in
+            self?.sendMIDIClockPulse()
+        }
+        timer.resume()
+
+        clockTimer = timer
+        isClockRunning = true
+        currentClockTempo = bpm
+    }
+
+    /// Stop sending MIDI Clock
+    func stopClock() {
+        guard isClockRunning else { return }
+
+        clockTimer?.cancel()
+        clockTimer = nil
+        isClockRunning = false
+
+        // Send MIDI Stop message
+        if let destination = connectedDestination {
+            sendMIDIRealTimeMessage(0xFC, to: destination)
+        }
+
+        currentClockTempo = nil
+    }
+
+    /// Send a single MIDI Clock pulse (called by timer)
+    private func sendMIDIClockPulse() {
+        guard let destination = connectedDestination else { return }
+        sendMIDIRealTimeMessage(0xF8, to: destination)
+    }
+
+    /// Send a MIDI Real-Time message (single byte: Clock, Start, Stop, etc.)
+    private func sendMIDIRealTimeMessage(_ message: UInt8, to destination: MIDIDestination) {
+        var packetList = MIDIPacketList()
+        var packet = MIDIPacketListInit(&packetList)
+
+        let bytes: [UInt8] = [message]
+        bytes.withUnsafeBufferPointer { buffer in
+            packet = MIDIPacketListAdd(&packetList, 1024, packet, 0, buffer.count, buffer.baseAddress!)
+        }
+
         MIDISend(outputPort, destination.endpoint, &packetList)
     }
 }

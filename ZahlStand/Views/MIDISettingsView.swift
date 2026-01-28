@@ -41,6 +41,22 @@ struct MIDISettingsView: View {
                 }
 
                 Section {
+                    Toggle("Send MIDI Clock", isOn: $midiService.sendMIDIClock)
+                    if let tempo = midiService.currentClockTempo {
+                        HStack {
+                            Text("Current Tempo")
+                            Spacer()
+                            Text("\(tempo) BPM")
+                                .foregroundColor(.green)
+                        }
+                    }
+                } header: {
+                    Text("Tempo Sync")
+                } footer: {
+                    Text("Send MIDI Clock to sync delay, arpeggiator, and other tempo-based effects. Tempo is read from each song's BPM setting.")
+                }
+
+                Section {
                     Picker("Active Instrument", selection: $overridesService.activeInstrumentType) {
                         ForEach(MIDIInstrumentType.allCases) { type in
                             Label(type.displayName, systemImage: type.iconName)
