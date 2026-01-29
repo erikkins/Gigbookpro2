@@ -449,6 +449,10 @@ struct WelcomeView: View {
 struct QuickJumpView: View {
     @ObservedObject var viewModel: DocumentViewerViewModel
     @Binding var isPresented: Bool
+    @EnvironmentObject var documentService: DocumentService
+    @EnvironmentObject var midiService: MIDIService
+    @EnvironmentObject var overridesService: LocalMIDIOverridesService
+    @State private var songToEdit: Song?
 
     private var songs: [Song] {
         if viewModel.isLibraryMode {
@@ -470,46 +474,57 @@ struct QuickJumpView: View {
         NavigationView {
             List {
                 ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    Button {
-                        viewModel.jumpToSong(at: index)
-                        isPresented = false
-                    } label: {
-                        HStack {
-                            Text("\(index + 1)")
-                                .font(.headline.monospacedDigit())
-                                .foregroundColor(.secondary)
-                                .frame(width: 36, alignment: .trailing)
+                    HStack {
+                        Button {
+                            viewModel.jumpToSong(at: index)
+                            isPresented = false
+                        } label: {
+                            HStack {
+                                Text("\(index + 1)")
+                                    .font(.headline.monospacedDigit())
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 36, alignment: .trailing)
 
-                            if index == viewModel.currentSongIndex {
-                                Image(systemName: "play.fill")
-                                    .foregroundColor(.accentColor)
-                                    .font(.caption)
-                            } else {
-                                Spacer().frame(width: 16)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(song.title)
-                                    .font(.body)
-                                    .foregroundColor(index == viewModel.currentSongIndex ? .accentColor : .primary)
-
-                                if let artist = song.artist {
-                                    Text(artist)
+                                if index == viewModel.currentSongIndex {
+                                    Image(systemName: "play.fill")
+                                        .foregroundColor(.accentColor)
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                } else {
+                                    Spacer().frame(width: 16)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(song.title)
+                                        .font(.body)
+                                        .foregroundColor(index == viewModel.currentSongIndex ? .accentColor : .primary)
+
+                                    if let artist = song.artist {
+                                        Text(artist)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                if song.hasMIDIProgramChange {
+                                    Image(systemName: "pianokeys")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
                                 }
                             }
-
-                            Spacer()
-
-                            if song.hasMIDIProgramChange {
-                                Image(systemName: "pianokeys")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
+
+                        Button {
+                            songToEdit = song
+                        } label: {
+                            Image(systemName: "pencil.circle")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .listRowBackground(index == viewModel.currentSongIndex ?
                         Color.accentColor.opacity(0.1) : Color.clear)
@@ -522,6 +537,12 @@ struct QuickJumpView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { isPresented = false }
                 }
+            }
+            .sheet(item: $songToEdit) { song in
+                SongEditorView(song: song)
+                    .environmentObject(documentService)
+                    .environmentObject(midiService)
+                    .environmentObject(overridesService)
             }
         }
     }
