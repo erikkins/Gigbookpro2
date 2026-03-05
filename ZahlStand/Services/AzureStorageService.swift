@@ -226,6 +226,7 @@ class AzureStorageService: ObservableObject {
             if let v = song.key { s["key"] = v }
             if let v = song.tempo { s["tempo"] = v }
             if let v = song.notes { s["notes"] = v }
+            if let v = song.timeSignature { s["timeSignature"] = v }
             if let v = song.pageCount { s["pageCount"] = v }
 
             // Export MIDI profiles (new format)
@@ -481,7 +482,8 @@ class AzureStorageService: ObservableObject {
                         : nil)
 
                 if let existing = existing {
-                    // Song exists - apply MIDI settings from cloud if present
+                    // Song exists - apply metadata and MIDI settings from cloud
+                    applySongMetadata(from: s, to: existing)
                     applyMIDISettings(from: s, to: existing)
                     // Apply annotation profiles if present
                     if let annotationService = annotationService {
@@ -490,8 +492,9 @@ class AzureStorageService: ObservableObject {
                     documentService.saveSong(existing)
                     ids.append(existing.id)
                 } else if let b64 = s["fileData"] as? String, let fileData = Data(base64Encoded: b64) {
-                    // New song - import file and apply MIDI settings
+                    // New song - import file and apply metadata + MIDI settings
                     let song = try await documentService.importEmbeddedFile(name: s["title"] as? String ?? "", fileName: fn, data: fileData)
+                    applySongMetadata(from: s, to: song)
                     applyMIDISettings(from: s, to: song)
                     // Apply annotation profiles if present
                     if let annotationService = annotationService {
@@ -512,6 +515,25 @@ class AzureStorageService: ObservableObject {
         documentService.loadSongs()
 
         return sl
+    }
+
+    /// Apply song metadata (tempo, key, notes, timeSignature, pageCount) from cloud data to a song
+    private func applySongMetadata(from cloudData: [String: Any], to song: Song) {
+        if let tempo = cloudData["tempo"] as? String {
+            song.tempo = tempo
+        }
+        if let key = cloudData["key"] as? String {
+            song.key = key
+        }
+        if let notes = cloudData["notes"] as? String {
+            song.notes = notes
+        }
+        if let timeSignature = cloudData["timeSignature"] as? String {
+            song.timeSignature = timeSignature
+        }
+        if let pageCount = cloudData["pageCount"] as? Int {
+            song.pageCount = pageCount
+        }
     }
 
     /// Apply MIDI settings from cloud data to a song (retains cloud settings when present)
