@@ -157,7 +157,7 @@ struct DocumentViewer: View {
         .sheet(isPresented: $showingMIDISettings) {
             MIDISettingsView(midiService: midiService, overridesService: overridesService)
         }
-        .sheet(isPresented: $showingQuickJump) {
+        .fullScreenCover(isPresented: $showingQuickJump) {
             QuickJumpView(viewModel: viewModel, isPresented: $showingQuickJump)
         }
         .sheet(item: $annotationEditorContext) { context in
