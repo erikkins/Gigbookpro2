@@ -489,6 +489,15 @@ class AzureStorageService: ObservableObject {
                     if let annotationService = annotationService {
                         applyAnnotationSettings(from: s, to: existing, annotationService: annotationService)
                     }
+                    // Overwrite local file if cloud version is different
+                    if let b64 = s["fileData"] as? String, let cloudData = Data(base64Encoded: b64),
+                       let localPath = existing.filePath {
+                        let localData = try? Data(contentsOf: localPath)
+                        if localData != cloudData {
+                            try? cloudData.write(to: localPath)
+                            print("📄 Updated file: \(fn)")
+                        }
+                    }
                     documentService.saveSong(existing)
                     ids.append(existing.id)
                 } else if let b64 = s["fileData"] as? String, let fileData = Data(base64Encoded: b64) {
